@@ -122,3 +122,14 @@ typedef struct tcpdata
   u_char data[65536];
 } tcpdata;
 
+typedef struct miruopt
+{
+  int  vlevel;
+  int  tcpsession_count;
+  char dev[32];
+  char exp[1024];
+} miruopt;
+
+extern miruopt opt;
+
+

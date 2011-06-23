@@ -4,6 +4,7 @@ IPdata  *IPTOP  = NULL;
 TCPdata *TCPTOP = NULL;
 L7data  *L7TOP  = NULL;
 
+miruopt opt;
 tcpsession *actsession[256];
 tcpsession *tcpsession_free;
 
@@ -15,12 +16,14 @@ void version()
 void usage()
 {
   version();
-  printf("usage: miruo [option] [expression]\n");
+  printf("usage: miruo [-T] [option] [expression]\n");
   printf("\n");
   printf("  option\n");
-  printf("   -h # help\n");
-  printf("   -v # version\n");
-  printf("   -t # tcp session monitor\n");
+  printf("   -h           # help\n");
+  printf("   -V           # version\n");
+  printf("   -v           # verbose\n");
+  printf("   -i interface # \n");
+  printf("   -T           # tcp session monitor\n");
   printf("\n");
 }
 
@@ -196,6 +199,7 @@ tcpsession *new_tcpsession(tcpsession *c)
   static uint16_t sid = 0;
   tcpsession *s = malloc(sizeof(tcpsession));
   memcpy(s, c, sizeof(tcpsession));
+  opt.tcpsession_count++;
   s->sid = sid++;
   return(s);
 }
@@ -221,6 +225,7 @@ void del_tcpsession(tcpsession *c)
     }
   }
   free(c);
+  opt.tcpsession_count--;
   del_tcpsession(s);
 }
 
@@ -390,14 +395,18 @@ struct option *get_optlist()
 
 int miruo_init()
 {
+  memset(&opt, 0, sizeof(opt));
   memset(actsession, 0, sizeof(actsession));
   tcpsession_free = NULL;
+  strcpy(opt.dev,"eth0");
 }
 
 int main(int argc, char *argv[])
 {
+  int i;
   int r;
   int m;
+  char expr[1024];
   char filter[1024];
   char errmsg[2046];
   pcap_t *pc;
@@ -407,7 +416,10 @@ int main(int argc, char *argv[])
   pcap_handler hn = NULL;
 
   miruo_init();
-  while((r = getopt_long(argc, argv, "hVTv", get_optlist(), NULL)) != -1){
+  memset(expr,   0, sizeof(expr));
+  memset(filter, 0, sizeof(filter));
+  memset(errmsg, 0, sizeof(errmsg));
+  while((r = getopt_long(argc, argv, "hVTvi:", get_optlist(), NULL)) != -1){
     switch(r){
       case 'h':
         usage();
@@ -416,11 +428,15 @@ int main(int argc, char *argv[])
         version();
         exit(0);
       case 'v':
+        opt.vlevel++;
         break;
       case 'T':
         m = MIRUO_MODE_TCP_SESSION;
         hn = miruo_tcp_session;
-        strcpy(filter, "tcp[13] & 23 != 0"); /* SYN/ACK/RST/FIN */
+        strcpy(filter, "tcp");
+        break;
+      case 'i':
+        strcpy(opt.dev, optarg);
         break;
       case '?':
         usage();
@@ -431,16 +447,30 @@ int main(int argc, char *argv[])
     usage(0);
     exit(1);
   }
-  pc = pcap_open_live("eth0", 1600, 1, 1000, errmsg);
+  for(i=optind;i<argc;i++){
+    if(strlen(expr)){
+      strcat(expr, " ");
+    }
+    strcat(expr, argv[i]);
+  }
+  if(strlen(filter)){
+    if(strlen(expr)){
+      strcat(expr, " and ");
+    }
+    strcat(expr,  filter);
+  }
+
+  printf("vlevel: %d\n", opt.vlevel);
+  pc = pcap_open_live(opt.dev, 1600, 1, 1000, errmsg);
   if(!pc){
-    fprintf(stderr, "pcap_open_live error: %s\n", errmsg);
+    fprintf(stderr, "pcap_open_live error: %s %s\n", errmsg, opt.dev);
     return(1);
   }
-  if(pcap_lookupnet("eth0", &ln, &nm, errmsg)){
+  if(pcap_lookupnet(opt.dev, &ln, &nm, errmsg)){
     fprintf(stderr, "pcap_looknet error: %s\n", errmsg);
     return(1);
   }
-  if(pcap_compile(pc, &pf, filter, 0, nm)){
+  if(pcap_compile(pc, &pf, expr, 0, nm)){
     fprintf(stderr, "pcap_compile error: %s\n", pcap_geterr(pc));
     return(1);
   }
