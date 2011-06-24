@@ -3,6 +3,7 @@
 #include<stdint.h>
 #include<string.h>
 #include<getopt.h>
+#include<signal.h>
 #include<time.h>
 #include<sys/time.h>
 #include<sys/types.h>
@@ -50,9 +51,11 @@ typedef struct ethhdr{
   uint8_t  smac[6];
   uint8_t  dmac[6];
   uint16_t type;
-  uint8_t  data[1500];
-  uint8_t  crc[4];
 } ethhdr;
+
+typedef struct sllhdr{
+  uint16_t type;
+} sllhdr;
 
 typedef struct iphdr
 {
@@ -124,10 +127,18 @@ typedef struct tcpdata
 
 typedef struct miruopt
 {
-  int  vlevel;
+  pcap_t *p;
+  int  loop;
+  int  lktype;
+  int  pksize;
+  int  promisc;
+  int  verbose;
   int  tcpsession_count;
   char dev[32];
   char exp[1024];
+  char lkname[256];
+  char lkdesc[256];
+  char file[PATH_MAX];
 } miruopt;
 
 extern miruopt opt;
