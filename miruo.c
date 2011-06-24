@@ -365,8 +365,15 @@ void miruo_tcp_ack(tcpsession *c, tcpsession *s)
       print_tcpsession(c, 0);
       del_tcpsession(c);
       break;
+    default:
+      if(opt.verbose > 1){
+        stok_tcpsession(c, s);
+        print_tcpsession(c, 0);
+      }
+      break;
   }
 }
+
 void miruo_tcp_fin(tcpsession *c, tcpsession *s)
 {
   stok_tcpsession(c, s);
@@ -499,8 +506,7 @@ void miruo_tcp_session(u_char *u, const struct pcap_pkthdr *h, const u_char *p)
       miruo_tcp_rst(c, &s);
       return;
     default:
-      stok_tcpsession(c, &s);
-      print_tcpsession(c, 0);
+      print_tcpsession(&s, 1);
       return;
   }
 }
