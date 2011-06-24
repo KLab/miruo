@@ -1,9 +1,5 @@
 #include "miruo.h"
 
-IPdata  *IPTOP  = NULL;
-TCPdata *TCPTOP = NULL;
-L7data  *L7TOP  = NULL;
-
 miruopt opt;
 tcpsession *actsession[256];
 tcpsession *tcpsession_free;
@@ -138,8 +134,6 @@ u_char *ethhdr_read(ethhdr *h, u_char *p, uint32_t *l)
 
 u_char *sllhdr_read(sllhdr *h, u_char *p, uint32_t *l)
 {
-  //printf("-----------------------------------------------\n");
-  //dump_data(p, 32);
   if(*l <= 16){
     return(NULL);
   }
@@ -332,6 +326,85 @@ void print_tcpsession(tcpsession *s, int flag)
   print_tcpsession(s->stok, 1);
 }
 
+
+void miruo_tcp_syn(tcpsession *c, tcpsession *s)
+{
+  if(c){
+    // SYNの再送を検出
+    stok_tcpsession(c, s);
+    print_tcpsession(c, 1);
+  }else{
+    c = new_tcpsession(s);
+    c->state = MIRUO_STATE_TCP_SYN;
+    add_tcpsession(c);
+    print_tcpsession(c, opt.verbose);
+  }
+}
+
+void miruo_tcp_synack(tcpsession *c, tcpsession *s)
+{
+  stok_tcpsession(c, s);
+  if(c->state == MIRUO_STATE_TCP_SYN){
+    c->state = MIRUO_STATE_TCP_SYNACK;
+    print_tcpsession(c, 0);
+  }else{
+    print_tcpsession(c, 1);
+  }
+}
+
+void miruo_tcp_ack(tcpsession *c, tcpsession *s)
+{
+  switch(c->state){
+    case MIRUO_STATE_TCP_SYNACK:
+      c->state = MIRUO_STATE_TCP_EST;
+      stok_tcpsession(c, s);
+      print_tcpsession(c, 0);
+      break;
+    case MIRUO_STATE_TCP_FINACK:
+      stok_tcpsession(c, s);
+      print_tcpsession(c, 0);
+      del_tcpsession(c);
+      break;
+  }
+}
+void miruo_tcp_fin(tcpsession *c, tcpsession *s)
+{
+  stok_tcpsession(c, s);
+  switch(c->state){
+    case MIRUO_STATE_TCP_EST:
+      c->state = MIRUO_STATE_TCP_FIN;
+      print_tcpsession(c, 0);
+      break;
+    default:
+      print_tcpsession(c, 1);
+      break;
+  }
+}
+void miruo_tcp_finack(tcpsession *c, tcpsession *s)
+{
+  stok_tcpsession(c, s);
+  switch(c->state){
+    case MIRUO_STATE_TCP_EST:
+      c->state = MIRUO_STATE_TCP_FIN;
+      print_tcpsession(c, 0);
+      break;
+    case MIRUO_STATE_TCP_FIN:
+      c->state = MIRUO_STATE_TCP_FINACK;
+      print_tcpsession(c, 0);
+      break;
+    default:
+      print_tcpsession(c, 1);
+      break;
+  }
+}
+
+void miruo_tcp_rst(tcpsession *c, tcpsession *s)
+{
+  stok_tcpsession(c, s);
+  print_tcpsession(c, 1);
+  del_tcpsession(c);
+}
+
 void miruo_tcp_session(u_char *u, const struct pcap_pkthdr *h, const u_char *p)
 {
   ethhdr     eh;
@@ -400,16 +473,7 @@ void miruo_tcp_session(u_char *u, const struct pcap_pkthdr *h, const u_char *p)
 
   /****** SYN ******/
   if(th.flags == 2){
-    if(c){
-      // SYNの再送を検出
-      stok_tcpsession(c, &s);
-      print_tcpsession(c, 1);
-    }else{
-      c = new_tcpsession(&s);
-      c->state = MIRUO_STATE_TCP_SYN;
-      add_tcpsession(c);
-      print_tcpsession(c, opt.verbose);
-    }
+    miruo_tcp_syn(c, &s);
     return;
   }
 
@@ -418,78 +482,27 @@ void miruo_tcp_session(u_char *u, const struct pcap_pkthdr *h, const u_char *p)
     return;
   }
 
-  /****** ACK *****/
-  if(th.flags == 16){
-    switch(c->state){
-      case MIRUO_STATE_TCP_SYNACK:
-        c->state = MIRUO_STATE_TCP_EST;
-        stok_tcpsession(c, &s);
-        print_tcpsession(c, 0);
-        break;
-      case MIRUO_STATE_TCP_FINACK:
-        stok_tcpsession(c, &s);
-        print_tcpsession(c, 0);
-        del_tcpsession(c);
-        break;
-    }
-    return;
-  }
-
-  /***** SYN/ACK *****/
-  if(th.flags == 18){
-    stok_tcpsession(c, &s);
-    if(c->state == MIRUO_STATE_TCP_SYN){
-      c->state = MIRUO_STATE_TCP_SYNACK;
+  switch(th.flags){
+    case 16:
+      miruo_tcp_ack(c, &s);
+      return;
+    case 18:
+      miruo_tcp_synack(c, &s);
+      return;
+    case 1:
+      miruo_tcp_fin(c, &s);
+      return;
+    case 17:
+      miruo_tcp_finack(c, &s);
+      return;
+    case 4:
+      miruo_tcp_rst(c, &s);
+      return;
+    default:
+      stok_tcpsession(c, &s);
       print_tcpsession(c, 0);
-    }else{
-      print_tcpsession(c, 1);
-    }
-    return;
+      return;
   }
-
-  /***** FIN *****/
-  if(th.flags == 1){
-    stok_tcpsession(c, &s);
-    switch(c->state){
-      case MIRUO_STATE_TCP_EST:
-        c->state = MIRUO_STATE_TCP_FIN;
-        print_tcpsession(c, 0);
-        break;
-      default:
-        print_tcpsession(c, 1);
-        break;
-    }
-    return;
-  }
-
-  /***** FIN/ACK *****/
-  if(th.flags == 17){
-    stok_tcpsession(c, &s);
-    switch(c->state){
-      case MIRUO_STATE_TCP_EST:
-        c->state = MIRUO_STATE_TCP_FIN;
-        print_tcpsession(c, 0);
-        break;
-      case MIRUO_STATE_TCP_FIN:
-        c->state = MIRUO_STATE_TCP_FINACK;
-        print_tcpsession(c, 0);
-        break;
-      default:
-        print_tcpsession(c, 1);
-        break;
-    }
-    return;
-  }
-
-  /***** RST *****/
-  if(th.flags == 4){
-    stok_tcpsession(c, &s);
-    print_tcpsession(c, 1);
-    del_tcpsession(c);
-    return;
-  }
-  stok_tcpsession(c, &s);
-  print_tcpsession(c, 0);
 }
 
 struct option *get_optlist()
