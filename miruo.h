@@ -4,6 +4,7 @@
 #include<string.h>
 #include<getopt.h>
 #include<signal.h>
+#include<errno.h>
 #include<time.h>
 #include<sys/time.h>
 #include<sys/types.h>
@@ -13,12 +14,27 @@
 #include<arpa/inet.h>
 #include<pcap.h>
 
+/****** COLOR CODE *****/
+#define COLOR_RED    1
+#define COLOR_GREEN  2
+#define COLOR_YELLOW 3
+#define COLOR_BLUE   4
+#define COLOR_WHITE  7
+
+/***** MIRUO MODE *****/
 #define MIRUO_MODE_TCP_SESSION 1
-#define MIRUO_STATE_TCP_SYN    1
-#define MIRUO_STATE_TCP_SYNACK 2
-#define MIRUO_STATE_TCP_EST    3
-#define MIRUO_STATE_TCP_FIN    4
-#define MIRUO_STATE_TCP_FINACK 5
+
+/***** TCP STATUS *****/
+#define MIRUO_STATE_TCP_LISTEN     1
+#define MIRUO_STATE_TCP_SYN_SENT   2
+#define MIRUO_STATE_TCP_SYN_RECV   3
+#define MIRUO_STATE_TCP_EST        4
+#define MIRUO_STATE_TCP_FIN_WAIT1  5
+#define MIRUO_STATE_TCP_FIN_WAIT2  6
+#define MIRUO_STATE_TCP_CLOSE_WAIT 7
+#define MIRUO_STATE_TCP_LAST_ACK   8
+#define MIRUO_STATE_TCP_CLOSED     9
+#define MIRUO_STATE_TCP_TIME_WAIT  10
 
 typedef struct L7data{
   uint64_t session;
@@ -56,6 +72,13 @@ typedef struct ethhdr{
 typedef struct sllhdr{
   uint16_t type;
 } sllhdr;
+
+typedef struct l2hdr{
+  union{
+    ethhdr eth;
+    sllhdr sll;
+  } hdr;
+} l2hdr;
 
 typedef struct iphdr
 {
@@ -98,9 +121,16 @@ typedef struct tcphdr
 typedef struct tcpsession
 {
   uint16_t sid;
-  uint8_t view;
-  uint8_t state;
-  uint8_t flags;
+  uint8_t  sno;
+  uint8_t  rno;
+  uint8_t  view;
+  uint8_t  views;
+  uint8_t  color;
+  uint8_t  flags;
+  uint32_t seqno;
+  uint32_t ackno;
+  uint8_t  cs[2]; // 現在のステータス(ストックでは使用しない)
+  uint8_t  st[2]; // パケットを受け取った時点でのステータス
   union {
     struct sockaddr addr;
     struct sockaddr_in in;
@@ -125,15 +155,28 @@ typedef struct tcpdata
   u_char data[65536];
 } tcpdata;
 
+typedef struct tcpsession_pool
+{
+  uint32_t   count;
+  tcpsession *free;
+} tcpsession_pool;
+
 typedef struct miruopt
 {
   pcap_t *p;
   int  loop;
+  int  color;
   int  lktype;
   int  pksize;
   int  promisc;
   int  verbose;
-  int  tcpsession_count;
+  int  setalrm;
+  int  maxcount;
+  int  ac_count;
+  int  ts_count;
+  int  rstclose;
+  int  statuson;
+  int  interval;
   char dev[32];
   char exp[1024];
   char lkname[256];
