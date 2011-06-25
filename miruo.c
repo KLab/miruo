@@ -312,11 +312,11 @@ tcpsession *get_tcpsession(tcpsession *c)
       // 1msec以下の再送は許容する
       if(delay > 1){
         s->views = 1;
-        t->view  = 0;
-        c->view  = 0;
-        t->color = COLOR_GREEN;
-        c->color = COLOR_RED;
       }
+      t->view  = 0;
+      c->view  = 0;
+      t->color = COLOR_GREEN;
+      c->color = COLOR_RED;
       break;
     }  
   } 
