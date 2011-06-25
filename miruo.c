@@ -471,10 +471,19 @@ void miruo_tcp_session_status()
   printf("==============================\n");
 }
 
+tcpsession *miruo_tcp_session_destroy(tcpsession *t, char *msg)
+{
+  t->views = 1;
+  print_tcpsession(t);
+  printf(msg);
+  return(del_tcpsession(t));
+}
+
 void miruo_tcp_session_timeout()
 {
   char ts[32];
   char sc[2][8];
+  char msg[256];
   struct tm *lt;
   tcpsession *t;
   struct timeval tv;
@@ -498,10 +507,8 @@ void miruo_tcp_session_timeout()
   while(t){
     if(t->cs[0] == MIRUO_STATE_TCP_SYN_SENT){
       if((tv.tv_sec - t->ts.tv_sec) > 30){
-        t->views = 1;
-        print_tcpsession(t);
-        printf("%s[%05d] %s session close (time out)%s\n", sc[0], t->sid, ts, sc[1]);
-        t = del_tcpsession(t);
+        sprintf(msg, "%s[%05d] %s destroy session (time out)%s\n", sc[0], t->sid, ts, sc[1]);
+        t = miruo_tcp_session_destroy(t, msg);
         continue;
       }
     }
@@ -1027,6 +1034,7 @@ int main(int argc, char *argv[])
   if(miruo_set_timer(opt.interval) == -1){
     fprintf(stderr, "%s: timer error %s\n", __func__, strerror(errno));
   }
+
   printf("listening on %s, link-type %s (%s), capture size %d bytes\n", opt.dev, opt.lkname, opt.lkdesc, opt.pksize);
   if(pcap_loop(opt.p, -1, hn, NULL) == -1){
     fprintf(stderr, "pcap_loop error: %s\n", pcap_geterr(opt.p));
