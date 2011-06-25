@@ -2,6 +2,7 @@
 #include<stdlib.h>
 #include<stdint.h>
 #include<string.h>
+#include<math.h>
 #include<getopt.h>
 #include<signal.h>
 #include<errno.h>

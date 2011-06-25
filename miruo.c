@@ -285,7 +285,9 @@ int is_tcpsession_closed(tcpsession *c){
 
 tcpsession *get_tcpsession(tcpsession *c)
 {
+  double  delay;
   tcpsession *s;
+  tcpsession *t;
   for(s=tsact[0];s;s=s->next){
     if((memcmp(&(c->src), &(s->src), sizeof(c->src)) == 0) && (memcmp(&(c->dst), &(s->dst), sizeof(c->dst)) == 0)){
       c->sno = 0;
@@ -298,6 +300,26 @@ tcpsession *get_tcpsession(tcpsession *c)
       break;
     }
   }
+  for(t=s;t;t=t->stok){
+    if((t->seqno == c->seqno) && (t->ackno == c->ackno) && (t->flags == c->flags)){
+      delay  = c->ts.tv_usec;
+      delay /= 1000000;
+      delay += c->ts.tv_sec;
+      delay -= t->ts.tv_sec;
+      delay -= ((double)t->ts.tv_usec / 1000000.0);
+      delay *= 1000;
+      delay  = fabs(delay);
+      // 1msec以下の再送は許容する
+      if(delay > 1){
+        s->views = 1;
+        t->view  = 0;
+        c->view  = 0;
+        t->color = COLOR_GREEN;
+        c->color = COLOR_RED;
+      }
+      break;
+    }  
+  } 
   return(s);
 }
 
@@ -422,7 +444,7 @@ void print_tcpsession(tcpsession *s)
     sprintf(nd[s->rno], "%s:%u", inet_ntoa(s->dst.in.sin_addr), s->dst.in.sin_port);
     sprintf(st[0], "%s", get_state_string(s->st[s->sno]));
     sprintf(st[1], "%s", get_state_string(s->st[s->rno]));
-    sprintf(ts,  "%02d:%02d:%02d.%03u", t->tm_hour, t->tm_min, t->tm_sec, s->ts.tv_usec/1000);
+    sprintf(ts,  "%02d:%02d:%02d.%06u", t->tm_hour, t->tm_min, t->tm_sec, s->ts.tv_usec);
     if(s->color && opt.color){
       printf("\x1b[3%dm", s->color);
     }
@@ -505,8 +527,13 @@ void miruo_tcp_session_timeout()
     sc[1][1] = 0;
   }
   while(t){
-    if(t->cs[0] == MIRUO_STATE_TCP_SYN_SENT){
-      if((tv.tv_sec - t->ts.tv_sec) > 30){
+    if((tv.tv_sec - t->ts.tv_sec) > 30){
+      if(t->cs[0] == MIRUO_STATE_TCP_SYN_SENT){
+        sprintf(msg, "%s[%05d] %s destroy session (time out)%s\n", sc[0], t->sid, ts, sc[1]);
+        t = miruo_tcp_session_destroy(t, msg);
+        continue;
+      }
+      if(t->cs[0] == MIRUO_STATE_TCP_SYN_RECV){
         sprintf(msg, "%s[%05d] %s destroy session (time out)%s\n", sc[0], t->sid, ts, sc[1]);
         t = miruo_tcp_session_destroy(t, msg);
         continue;
@@ -521,7 +548,6 @@ void miruo_tcp_syn(tcpsession *c, tcpsession *s)
 {
   if(c){
     s = stok_tcpsession(c, s);
-    s->color = COLOR_RED;
     return;
   }
   c = new_tcpsession(s);
@@ -541,6 +567,7 @@ void miruo_tcp_synack(tcpsession *c, tcpsession *s)
     c = new_tcpsession(s);
     c->sno = 0;
     c->rno = 1;
+    c->views = 1;
     c->color = COLOR_RED;
     c->st[0] = MIRUO_STATE_TCP_SYN_RECV;
     c->st[1] = MIRUO_STATE_TCP_SYN_SENT;
@@ -557,6 +584,8 @@ void miruo_tcp_synack(tcpsession *c, tcpsession *s)
       break;
     default:
       c->views = 1;
+      s->view  = 0;
+      s->color = COLOR_RED;
       break;
   }
   switch(s->st[1]){
@@ -565,6 +594,8 @@ void miruo_tcp_synack(tcpsession *c, tcpsession *s)
       break;
     default:
       c->views = 1;
+      s->view  = 0;
+      s->color = COLOR_RED;
       break;
   }
   stok_tcpsession(c, s);
@@ -577,7 +608,7 @@ void miruo_tcp_ack(tcpsession *c, tcpsession *s)
     return;
   }
   s = stok_tcpsession(c, s);
-  s->view  = (opt.verbose < 2);
+  s->view = (opt.verbose < 2) && (s->color == 0);
   switch(s->st[0]){
     case MIRUO_STATE_TCP_SYN_RECV:
       s->st[0] = c->cs[s->sno] = MIRUO_STATE_TCP_EST;
@@ -589,7 +620,7 @@ void miruo_tcp_ack(tcpsession *c, tcpsession *s)
       break;
   }
   switch(s->st[1]){
-    case MIRUO_STATE_TCP_SYN_SENT:
+    case MIRUO_STATE_TCP_SYN_RECV:
       s->st[1] = c->cs[s->rno] = MIRUO_STATE_TCP_EST;
       s->view  = 0;
       break;
