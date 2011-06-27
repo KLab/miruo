@@ -148,6 +148,7 @@ typedef struct tcpsession
   uint8_t  flags;
   uint32_t seqno;
   uint32_t ackno;
+  uint32_t stcnt;
   uint8_t  cs[2]; // 現在のステータス(ストックでは使用しない)
   uint8_t  st[2]; // パケットを受け取った時点でのステータス
   union {

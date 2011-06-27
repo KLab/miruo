@@ -307,21 +307,20 @@ tcpsession *malloc_tcpsession()
 
 void free_tcpsession(tcpsession *c)
 {
-  if(c == NULL){
-    return;
-  }
-  tcpsession *s = c->stok;
-  if(tspool.count > 65535){
-    free(c);
-    opt.ts_count--;
-  }else{
-    if(c->next = tspool.free){
-      c->next->prev = c;
+  while(c){
+    tcpsession *s = c->stok;
+    if(tspool.count > 65535){
+      free(c);
+      opt.ts_count--;
+    }else{
+      if(c->next = tspool.free){
+        c->next->prev = c;
+      }
+      tspool.free = c;
+      tspool.count++;
     }
-    tspool.free = c;
-    tspool.count++;
+    c = s;
   }
-  free_tcpsession(s);
 }
 
 tcpsession *new_tcpsession(tcpsession *c)
@@ -364,6 +363,7 @@ tcpsession *del_tcpsession(tcpsession *c)
 tcpsession *stok_tcpsession(tcpsession *c, tcpsession *s)
 {
   tcpsession *t;
+  tcpsession *r;
   if(c == NULL){
     return;
   }
@@ -372,11 +372,34 @@ tcpsession *stok_tcpsession(tcpsession *c, tcpsession *s)
   }else{
     t = c;
   }
+  c->stcnt++;
   c->last = new_tcpsession(s);
   t->stok = c->last;
   t->stok->sid   = c->sid;
   t->stok->st[0] = c->cs[s->sno];
   t->stok->st[1] = c->cs[s->rno];
+  if(c->stcnt > 2048){
+    r = c;
+    s = c->stok;
+    while(s){
+      if(s->view == 0){
+        r = s;
+        s = s->stok;
+        continue;
+      }
+      r->stok = s->stok;
+      s->stok = NULL;
+      if(c->last == s){
+        c->last = r;
+      }
+      free_tcpsession(s);
+      s = r->stok;
+      c->stcnt--;
+      if(c->stcnt < 1024){
+        break;
+      }
+    }
+  }
   return(c->last);
 }
 
@@ -410,27 +433,26 @@ void print_tcpsession(FILE *fp, tcpsession *s)
   if(s->views == 0){
     return;
   }
-  if(s->view == 0){
-    t = localtime(&(s->ts.tv_sec));
-    sprintf(nd[s->sno], "%s:%u", inet_ntoa(s->src.in.sin_addr), s->src.in.sin_port);
-    sprintf(nd[s->rno], "%s:%u", inet_ntoa(s->dst.in.sin_addr), s->dst.in.sin_port);
-    sprintf(st[0], "%s", get_state_string(s->st[s->sno]));
-    sprintf(st[1], "%s", get_state_string(s->st[s->rno]));
-    sprintf(ts,  "%02d:%02d:%02d.%03u", t->tm_hour, t->tm_min, t->tm_sec, s->ts.tv_usec / 1000);
-    if(s->color && opt.color){
-      sprintf(cl[0], "\x1b[3%dm", s->color);
-      sprintf(cl[1], "\x1b[39m");
-    }else{
-      cl[0][0] = 0;
-      cl[1][0] = 0;
+  while(s){
+    if(s->view == 0){
+      t = localtime(&(s->ts.tv_sec));
+      sprintf(nd[s->sno], "%s:%u", inet_ntoa(s->src.in.sin_addr), s->src.in.sin_port);
+      sprintf(nd[s->rno], "%s:%u", inet_ntoa(s->dst.in.sin_addr), s->dst.in.sin_port);
+      sprintf(st[0], "%s", get_state_string(s->st[s->sno]));
+      sprintf(st[1], "%s", get_state_string(s->st[s->rno]));
+      sprintf(ts,  "%02d:%02d:%02d.%03u", t->tm_hour, t->tm_min, t->tm_sec, s->ts.tv_usec / 1000);
+      if(s->color && opt.color){
+        sprintf(cl[0], "\x1b[3%dm", s->color);
+        sprintf(cl[1], "\x1b[39m");
+      }else{
+        cl[0][0] = 0;
+        cl[1][0] = 0;
+      }
+      fprintf(fp, "%s[%05d] %s %s %08X/%08X %s %s %s \t%s/%s%s\n",
+        cl[0], s->sid, ts, tcp_flag_str(s->flags), s->seqno, s->ackno, nd[0], allow[s->sno], nd[1], st[0], st[1], cl[1]);
+      s->view = 1;
     }
-    fprintf(fp, "%s[%05d] %s %s %08X/%08X %s %s %s \t%s/%s%s\n",
-      cl[0], s->sid, ts, tcp_flag_str(s->flags), s->seqno, s->ackno, nd[0], allow[s->sno], nd[1], st[0], st[1], cl[1]);
-    s->view = 1;
-  }
-  if(s->stok){
-    s->stok->views = s->views;
-    print_tcpsession(fp, s->stok);
+    s = s->stok;
   }
 }
 
@@ -498,7 +520,7 @@ void miruo_tcp_session_statistics()
     ts.next  = NULL;
     ts.st[0] = ts.cs[0];
     ts.st[1] = ts.cs[1];
-    fprintf(stderr, "%05d: ", sc);
+    fprintf(stderr, "%04d: ", sc);
     print_tcpsession(stderr, &ts);
   }
   fprintf(stderr, "==============================\n");
@@ -564,6 +586,7 @@ void miruo_tcp_session_timeout()
           }
           free_tcpsession(s);
           s = r->stok;
+          t->stcnt--;
           continue;
         }
       }
