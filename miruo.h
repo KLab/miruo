@@ -74,6 +74,7 @@ typedef struct ethhdr{
 } ethhdr;
 
 typedef struct sllhdr{
+  uint8_t d[14];
   uint16_t type;
 } sllhdr;
 
@@ -83,6 +84,20 @@ typedef struct l2hdr{
     sllhdr sll;
   } hdr;
 } l2hdr;
+
+typedef struct iphdr_row
+{
+  uint8_t  vih;
+  uint8_t  tos;
+  uint16_t len;
+  uint16_t id;
+  uint16_t ffo;
+  uint8_t  ttl;
+  uint8_t  protocol;
+  uint16_t checksum;
+  uint32_t src;
+  uint32_t dst;
+} iphdr_row;
 
 typedef struct iphdr
 {
@@ -98,7 +113,7 @@ typedef struct iphdr
   uint16_t Checksum;
   struct in_addr src;
   struct in_addr dst;
-  uint32_t options[10];
+  uint8_t option[40];
 } iphdr;
 
 typedef struct ipdata

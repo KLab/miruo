@@ -15,9 +15,9 @@ void usage()
   printf("usage: miruo [-m mode] [option] [expression]\n");
   printf("\n");
   printf("  mode\n");
-  printf("   tcp          # tcp session check(default)\n");
-  printf("   http         # http request monitor(not yet)\n");
-  printf("   mysql        # mysql query  monitor(not yet)\n");
+  printf("   tcp          # tcp  session check   (default)\n");
+  printf("   http         # http request monitor (not yet)\n");
+  printf("   mysql        # mysql query  monitor (not yet)\n");
   printf("\n");
   printf("  option\n");
   printf("   -h           # help\n");
@@ -27,8 +27,8 @@ void usage()
   printf("   -vvv         # most verbose\n");
   printf("   -C0          # color off\n");
   printf("   -C1          # color on\n");
-  printf("   -R           # find RST break(tcp only)\n");
-  printf("   -RR          # find RST close(tcp only)\n");
+  printf("   -R           # find RST break\n");
+  printf("   -RR          # find RST close\n");
   printf("   -t time      # retransmit limit time(Default 1000ms)\n");
   printf("   -s interval  # statistics view interval(Default 60sec)\n");
   printf("   -r file      # read file(for tcpdump -w)\n");
@@ -76,11 +76,11 @@ void print_iphdr(iphdr *h)
   printf("Offset  : %hu\n",  h->offset);
   printf("TTL     : %hhu\n", h->TTL);
   printf("Protocol: %hhu\n", h->Protocol);
-  printf("Checksum: %hu\n",  h->Checksum);
+  printf("Checksum: %hX\n",  h->Checksum);
   printf("SrcAddr : %s\n",   inet_ntoa(h->src));
   printf("DstAddr : %s\n",   inet_ntoa(h->dst));
-  for(i=5;i<h->IHL;i++){
-    printf("Options[%d]: 0x%04x\n", i - 5, h->options[i - 5]);
+  for(i=0;i<(h->IHL - 20);i++){
+    printf("option[%02d]: %02x\n", h->option[i]);
   }
 }
 
@@ -143,31 +143,19 @@ void print_tcphdr(tcphdr *h)
 
 u_char *read_ethhdr(ethhdr *h, u_char *p, uint32_t *l)
 {
-  if(*l <= 14){
-    return(NULL);
-  }
-  memcpy(h->smac, p, sizeof(h->smac));
-  p  += 6;
-  *l -= 6;
-  memcpy(h->dmac, p, sizeof(h->dmac));
-  p  += 6;
-  *l -= 6;
-  h->type = ntohs((uint16_t)*p);
-  p  += 2;
-  *l -= 2;
+  memcpy(h, p, sizeof(ethhdr));
+  h->type = ntohs(h->type);
+  p  += sizeof(ethhdr);
+  *l -= sizeof(ethhdr);
   return(p);
 }
 
 u_char *read_sllhdr(sllhdr *h, u_char *p, uint32_t *l)
 {
-  if(*l <= 16){
-    return(NULL);
-  }
-  p  += 14;
-  *l -= 14;
-  h->type = ntohs(*((uint16_t *)p));
-  p  += 2;
-  *l -= 2;
+  memcpy(h, p, sizeof(sllhdr));
+  h->type = ntohs(h->type);
+  p  += sizeof(sllhdr);
+  *l -= sizeof(sllhdr);
   return(p);
 }
 
@@ -184,64 +172,34 @@ uint8_t *read_l2hdr(l2hdr *hdr, u_char *p, uint32_t *l){
 
 u_char *iphdr_read(iphdr *h, u_char *p, int *l)
 {
-  int i;
-  uint32_t d;
-
-  if(*l < 4){
+  int optlen;
+  iphdr_row hr;
+  if(*l < sizeof(hr)){
     return(NULL);
   }
-  d = ntohl(*((uint32_t *)p));
-  h->Ver = (d >> 28) & 0x000f;
-  h->IHL = (d >> 24) & 0x000f;
-  h->TOS = (d >> 16) & 0x00ff;
-  h->len = (d >>  0) & 0xffff;
-  p  += 4;
-  *l -= 4;
-
-  if(*l < 4){
-    return(NULL);
-  }
-  d = ntohl(*((uint32_t *)p));
-  h->id     = (d >> 16) & 0xffff;
-  h->flags  = (d >> 13) & 0x0007;
-  h->offset = (d >>  0) & 0x1fff;
-  p  += 4;
-  *l -= 4;
-
-  if(*l < 4){
-    return(NULL);
-  }
-  d = ntohl(*((uint32_t *)p));
-  h->TTL      = (d >> 24) & 0x00ff;
-  h->Protocol = (d >> 16) & 0x00ff;
-  h->Checksum = (d >>  0) & 0xffff;
-  p  += 4;
-  *l -= 4;
-
-  if(*l < 4){
-    return(NULL);
-  }
-  d = ntohl(*((uint32_t *)p));
-  h->src.s_addr = ntohl(d);
-  p  += 4;
-  *l -= 4;
-
-  if(*l < 4){
-    return(NULL);
-  }
-  d = ntohl(*((uint32_t *)p));
-  h->dst.s_addr = ntohl(d);
-  p  += 4;
-  *l -= 4;
-
-  for(i=5;i<h->IHL;i++){
-    if(*l < 4){
+  memcpy(&hr, p, sizeof(hr));
+  h->Ver        = (hr.vih & 0xf0) >> 4;
+  h->IHL        = (hr.vih & 0x0f) << 2;
+  h->TOS        = hr.tos;
+  h->len        = ntohs(hr.len);
+  h->id         = ntohs(hr.id);
+  h->flags      = ntohs(hr.ffo) >> 13;
+  h->offset     = ntohs(hr.ffo) & 0x1fff;
+  h->TTL        = hr.ttl;
+  h->Protocol   = hr.protocol;
+  h->Checksum   = ntohs(hr.checksum);
+  h->src.s_addr = hr.src;
+  h->dst.s_addr = hr.dst;
+  p  += sizeof(hr);
+  *l -= sizeof(hr);
+  if(optlen = h->IHL - sizeof(hr)){
+    if(*l < optlen){
       return(NULL);
     }
-    h->options[i-5] = ntohl(*((uint32_t *)p));
-    p  += 4;
-    *l -= 4;
-  }
+    memcpy(h->option, p, optlen);
+    p  += optlen;
+    *l -= optlen;
+  }  
   return(p);
 }
 
