@@ -29,6 +29,7 @@ void usage()
   printf("   -C1          # color on\n");
   printf("   -R           # find RST break(tcp only)\n");
   printf("   -RR          # find RST close(tcp only)\n");
+  printf("   -L time      # retransmit time limit(Default 100ms)\n");
   printf("   -S interval  # status view\n");
   printf("   -r file      # read file(for tcpdump -w)\n");
   printf("   -i interface # \n");
@@ -312,8 +313,7 @@ tcpsession *get_tcpsession(tcpsession *c)
       delay -= t->ts.tv_usec;
       delay /= 1000;
       delay  = abs(delay);
-      // 1msec以下の再送は無視する
-      if(delay == 0){
+      if(delay < opt.rt_limit){
         c->sno = 0;
         c->rno = 0;
       }else{
@@ -1034,6 +1034,7 @@ int miruo_init()
   opt.promisc  = 1;
   opt.setalrm  = 1;
   opt.pksize   = 96;
+  opt.rt_limit = 100;
   opt.color    = isatty(fileno(stdout));
 }
 
@@ -1044,7 +1045,9 @@ void miruo_setopt(int argc, char *argv[])
   char *F[8];
   memset(F, 0, sizeof(F));
   F[MIRUO_MODE_TCP_SESSION] = "tcp";
-  while((r = getopt_long(argc, argv, "hVvRC:S:i:m:r:", get_optlist(), NULL)) != -1){
+  F[MIRUO_MODE_HTTP]        =  NULL;
+  F[MIRUO_MODE_MYSQL]       =  NULL;
+  while((r = getopt_long(argc, argv, "hVvRL:C:S:i:m:r:", get_optlist(), NULL)) != -1){
     switch(r){
       case 'h':
         usage();
@@ -1060,6 +1063,11 @@ void miruo_setopt(int argc, char *argv[])
         break;
       case 'C':
         opt.color = atoi(optarg);
+        break;
+      case 'L':
+        if(atoi(optarg) > 0){
+          opt.rt_limit = atoi(optarg);
+        }
         break;
       case 'S':
         opt.statuson = atoi(optarg);
@@ -1092,7 +1100,6 @@ void miruo_setopt(int argc, char *argv[])
     }
     strcat(opt.exp, F[opt.mode]);
   }
-  
 }
 
 void miruo_pcap()
@@ -1112,7 +1119,7 @@ void miruo_pcap()
       if(p = pcap_lookupdev(errmsg)){
         strcpy(opt.dev, p);
       }else{
-        fprintf(stderr,"%s: [error] %s\n", __func__, errmsg);
+        fprintf(stderr,"%s. please run as root user.\n", errmsg);
         miruo_finish(1);
       }
     }

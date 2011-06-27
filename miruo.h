@@ -24,6 +24,8 @@
 
 /***** MIRUO MODE *****/
 #define MIRUO_MODE_TCP_SESSION 1
+#define MIRUO_MODE_HTTP        2
+#define MIRUO_MODE_MYSQL       3
 
 /***** TCP STATUS *****/
 #define MIRUO_STATE_TCP_LISTEN     1
@@ -180,6 +182,7 @@ typedef struct miruopt
   int  rstclose;
   int  statuson;
   int  interval;
+  int  rt_limit;
   char dev[32];
   char exp[1024];
   char lkname[256];
