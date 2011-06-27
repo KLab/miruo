@@ -6,7 +6,7 @@ tcpsession_pool tspool;
 
 void version()
 {
-  printf("miruo version 0.7\n");
+  printf("miruo version 0.8\n");
 }
 
 void usage()
@@ -137,7 +137,7 @@ void print_tcphdr(tcphdr *h)
   printf("ackno   : %u\n",      h->ackno);
   printf("offset  : %hhu\n",    h->offset);
   printf("flags   : %s\n",      flags);
-  printf("window  : %hd\n",     h->window);
+  printf("window  : %hu\n",     h->window);
   printf("checksum: 0x%04hx\n", h->checksum);
 }
 
@@ -173,26 +173,26 @@ uint8_t *read_l2hdr(l2hdr *hdr, u_char *p, uint32_t *l){
 u_char *iphdr_read(iphdr *h, u_char *p, int *l)
 {
   int optlen;
-  iphdr_row hr;
-  if(*l < sizeof(hr)){
+  iphdr_row *hr = (iphdr_row *)p;
+  if(*l < sizeof(iphdr_row)){
     return(NULL);
   }
-  memcpy(&hr, p, sizeof(hr));
-  h->Ver        = (hr.vih & 0xf0) >> 4;
-  h->IHL        = (hr.vih & 0x0f) << 2;
-  h->TOS        = hr.tos;
-  h->len        = ntohs(hr.len);
-  h->id         = ntohs(hr.id);
-  h->flags      = ntohs(hr.ffo) >> 13;
-  h->offset     = ntohs(hr.ffo) & 0x1fff;
-  h->TTL        = hr.ttl;
-  h->Protocol   = hr.protocol;
-  h->Checksum   = ntohs(hr.checksum);
-  h->src.s_addr = hr.src;
-  h->dst.s_addr = hr.dst;
-  p  += sizeof(hr);
-  *l -= sizeof(hr);
-  if(optlen = h->IHL - sizeof(hr)){
+  h->Ver        = (hr->vih & 0xf0) >> 4;
+  h->IHL        = (hr->vih & 0x0f) << 2;
+  h->TOS        = hr->tos;
+  h->len        = ntohs(hr->len);
+  h->id         = ntohs(hr->id);
+  h->flags      = ntohs(hr->ffo) >> 13;
+  h->offset     = ntohs(hr->ffo) & 0x1fff;
+  h->TTL        = hr->ttl;
+  h->Protocol   = hr->protocol;
+  h->Checksum   = ntohs(hr->checksum);
+  h->src.s_addr = hr->src;
+  h->dst.s_addr = hr->dst;
+  p  += sizeof(iphdr_row);
+  *l -= sizeof(iphdr_row);
+  if(optlen = h->IHL - sizeof(iphdr_row)){
+    printf("len~%d IHL=%d, size=%d\n", optlen, h->IHL, sizeof(iphdr_row));
     if(*l < optlen){
       return(NULL);
     }
@@ -205,19 +205,20 @@ u_char *iphdr_read(iphdr *h, u_char *p, int *l)
 
 u_char *tcphdr_read(tcphdr *h, u_char *p, int *l)
 {
+  tcphdr *hr = (tcphdr *)p;
   if(*l < 20){
     fprintf(stderr, "%s: len=%d need=20\n", __func__, *l);
     return(NULL);
   }
-  memcpy(h, p, sizeof(tcphdr));
-  h->sport    = ntohs(h->sport); 
-  h->dport    = ntohs(h->dport); 
-  h->seqno    = ntohl(h->seqno); 
-  h->ackno    = ntohl(h->ackno); 
-  h->offset   = h->offset >> 2;
-  h->window   = ntohl(h->window);
-  h->checksum = ntohl(h->checksum);
-  h->urgent   = ntohl(h->urgent);
+  h->sport    = ntohs(hr->sport); 
+  h->dport    = ntohs(hr->dport); 
+  h->seqno    = ntohl(hr->seqno); 
+  h->ackno    = ntohl(hr->ackno); 
+  h->offset   = hr->offset >> 2;
+  h->flags    = hr->flags;
+  h->window   = ntohs(hr->window);
+  h->checksum = ntohs(hr->checksum);
+  h->urgent   = ntohs(hr->urgent);
   if(*l < h->offset){
     return(NULL);
   }
