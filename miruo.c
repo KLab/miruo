@@ -282,6 +282,14 @@ tcpsession *get_tcpsession(tcpsession *c)
         t->color = COLOR_GREEN;
         c->color = COLOR_RED;
       }
+      t = t->stok;
+      while(t){
+        if(t->color == 0){
+          t->view  = 0;
+          t->color = COLOR_CYAN;
+        }
+        t = t->stok;
+      }
       break;
     }  
   } 
