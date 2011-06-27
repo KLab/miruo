@@ -136,7 +136,7 @@ typedef struct tcphdr
   uint16_t window;
   uint16_t checksum;
   uint16_t urgent;
-  uint32_t opt[11];
+  uint8_t opt[40];
 } tcphdr;
 
 typedef struct tcpsession
@@ -151,8 +151,10 @@ typedef struct tcpsession
   uint32_t seqno;
   uint32_t ackno;
   uint32_t stcnt;
-  uint8_t  cs[2]; // 現在のステータス(ストックでは使用しない)
-  uint8_t  st[2]; // パケットを受け取った時点でのステータス
+  uint8_t  cs[2];   // 現在のステータス(ストックでは使用しない)
+  uint8_t  st[2];   // パケットを受け取った時点でのステータス
+  uint8_t  optsize;
+  uint8_t  opt[40];
   union {
     struct sockaddr addr;
     struct sockaddr_in in;

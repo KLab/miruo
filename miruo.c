@@ -127,6 +127,71 @@ char *tcp_flag_str(uint8_t flags)
   return(fstr);
 }
 
+char *tcp_opt_str(uint8_t *opt, uint8_t optsize)
+{
+  static uint8_t optstr[256];
+  optstr[0]   = 0;
+  uint8_t  t  = 0;
+  uint8_t  l  = 0;
+  uint32_t d0 = 0;
+  uint32_t d1 = 0;
+  uint8_t buf[32];
+  while(optsize){
+    t = *(opt++);
+    if(t == 0){
+      break;    /* END */
+    }
+    if(t == 1){
+      continue; /* NO-OP */
+    }
+    d0 = 0;
+    d1 = 0;
+    l  = *(opt++);
+    switch(l-2){
+      case 1:
+        d0 = (uint32_t)(*((uint8_t *)opt));
+        break;
+      case 2:
+        d0 = (uint32_t)(ntohs(*((uint16_t *)opt)));
+        break;
+      case 4:
+        d0 = (uint32_t)(ntohl(*((uint32_t *)opt)));
+        break;
+      case 8:
+        d0 = ntohl(*((uint32_t *)(opt + 0)));
+        d1 = ntohl(*((uint32_t *)(opt + 4)));
+        break;
+    }
+    switch(t){
+      case 2:
+        sprintf(buf, "mss=%u", d0);
+        break;
+      case 3:
+        sprintf(buf, "win=%u", d0);
+        break;
+      case 4:
+        sprintf(buf, "sackOK");
+        break;
+      case 5:
+        sprintf(buf, "sack 1"); /* len = 10 */
+        break;
+      case 8:
+        sprintf(buf, "timestamp %u %u", d0, d1);
+        break;
+      default:
+        sprintf(buf, "len=%hhu opt[%hhu]", l, t);
+        break;
+    }
+    opt += (l - 2);
+    optsize -= l;
+    if(*optstr){
+      strcat(optstr, ", ");
+    }
+    strcat(optstr, buf);
+  }
+  return(optstr);
+}
+
 void print_tcphdr(tcphdr *h)
 {
   char *flags = tcp_flag_str(h->flags);
@@ -170,7 +235,7 @@ uint8_t *read_l2hdr(l2hdr *hdr, u_char *p, uint32_t *l){
 }
 
 
-u_char *iphdr_read(iphdr *h, u_char *p, int *l)
+u_char *read_iphdr(iphdr *h, u_char *p, int *l)
 {
   int optlen;
   iphdr_row *hr = (iphdr_row *)p;
@@ -203,11 +268,10 @@ u_char *iphdr_read(iphdr *h, u_char *p, int *l)
   return(p);
 }
 
-u_char *tcphdr_read(tcphdr *h, u_char *p, int *l)
+u_char *read_tcphdr(tcphdr *h, u_char *p, int *l)
 {
   tcphdr *hr = (tcphdr *)p;
   if(*l < 20){
-    fprintf(stderr, "%s: len=%d need=20\n", __func__, *l);
     return(NULL);
   }
   h->sport    = ntohs(hr->sport); 
@@ -222,6 +286,7 @@ u_char *tcphdr_read(tcphdr *h, u_char *p, int *l)
   if(*l < h->offset){
     return(NULL);
   }
+  memcpy(h->opt, hr->opt, h->offset - 20);
   p  += h->offset;
   *l -= h->offset;
   return(p);
@@ -281,14 +346,14 @@ tcpsession *get_tcpsession(tcpsession *c)
         c->view  = 0;
         t->color = COLOR_GREEN;
         c->color = COLOR_RED;
-      }
-      t = t->stok;
-      while(t){
-        if(t->color == 0){
-          t->view  = 0;
-          t->color = COLOR_CYAN;
-        }
         t = t->stok;
+        while(t){
+          if(t->color == 0){
+            t->view  = 0;
+            t->color = COLOR_CYAN;
+          }
+          t = t->stok;
+        }
       }
       break;
     }  
@@ -432,9 +497,9 @@ void print_tcpsession(FILE *fp, tcpsession *s)
   struct tm *t;
   char cl[2][16];
   char nd[2][64];
-  char st[2][64];
+  char st[256];
   char ts[256];
-  char *allow[] = {"->", "<-"};
+  char *allow[] = {">", "<"};
   if(s == NULL){
     return;
   }
@@ -446,9 +511,8 @@ void print_tcpsession(FILE *fp, tcpsession *s)
       t = localtime(&(s->ts.tv_sec));
       sprintf(nd[s->sno], "%s:%u", inet_ntoa(s->src.in.sin_addr), s->src.in.sin_port);
       sprintf(nd[s->rno], "%s:%u", inet_ntoa(s->dst.in.sin_addr), s->dst.in.sin_port);
-      sprintf(st[0], "%s", get_state_string(s->st[s->sno]));
-      sprintf(st[1], "%s", get_state_string(s->st[s->rno]));
-      sprintf(ts,  "%02d:%02d:%02d.%03u", t->tm_hour, t->tm_min, t->tm_sec, s->ts.tv_usec / 1000);
+      sprintf(st, "%s/%s", get_state_string(s->st[s->sno]), get_state_string(s->st[s->rno]));
+      sprintf(ts, "%02d:%02d:%02d.%03u", t->tm_hour, t->tm_min, t->tm_sec, s->ts.tv_usec / 1000);
       if(s->color && opt.color){
         sprintf(cl[0], "\x1b[3%dm", s->color);
         sprintf(cl[1], "\x1b[39m");
@@ -456,8 +520,12 @@ void print_tcpsession(FILE *fp, tcpsession *s)
         cl[0][0] = 0;
         cl[1][0] = 0;
       }
-      fprintf(fp, "%s[%05d] %s %s %08X/%08X %s %s %s \t%s/%s%s\n",
-        cl[0], s->sid, ts, tcp_flag_str(s->flags), s->seqno, s->ackno, nd[0], allow[s->sno], nd[1], st[0], st[1], cl[1]);
+      fprintf(fp, "%s[%05d] %s %08X/%08X %s %s%s%s %s %-23s <%s>%s\n",
+        cl[0], 
+        s->sid, ts, s->seqno, s->ackno, 
+        nd[0], allow[s->sno], tcp_flag_str(s->flags), allow[s->sno], nd[1], 
+        st, tcp_opt_str(s->opt, s->optsize), 
+        cl[1]);
       s->view = 1;
     }
     s = s->stok;
@@ -792,9 +860,11 @@ void hdr2tcpsession(tcpsession *s, iphdr *ih, tcphdr *th, const struct timeval *
   memcpy(&(s->dst.in.sin_addr), &(ih->dst), sizeof(struct in_addr));
   s->src.in.sin_port = th->sport;
   s->dst.in.sin_port = th->dport;
-  s->flags = th->flags;
-  s->seqno = th->seqno;
-  s->ackno = th->ackno;
+  s->flags   = th->flags;
+  s->seqno   = th->seqno;
+  s->ackno   = th->ackno;
+  s->optsize = th->offset - 20;
+  memcpy(s->opt, th->opt, s->optsize);
 }
 
 uint16_t get_l3type(l2hdr *hdr)
@@ -834,7 +904,7 @@ void miruo_tcp_session(u_char *u, const struct pcap_pkthdr *h, const u_char *p)
     return; // IP以外は破棄
   }
 
-  q = iphdr_read(&ih, q, &l);
+  q = read_iphdr(&ih, q, &l);
   if(q == NULL){
     opt.IPerr++;
     return; // 不正なIPヘッダ
@@ -846,7 +916,7 @@ void miruo_tcp_session(u_char *u, const struct pcap_pkthdr *h, const u_char *p)
     return; // TCP以外は破棄
   }
 
-  q = tcphdr_read(&th, q, &l);
+  q = read_tcphdr(&th, q, &l);
   if(q == NULL){
     opt.TCPerr++;
     return; // 不正なTCPヘッダ
@@ -941,13 +1011,13 @@ struct option *get_optlist()
 void signal_int_handler()
 {
   opt.loop = 0;
-  //pcap_breakloop(opt.p);
+  pcap_breakloop(opt.p);
 }
 
 void signal_term_handler()
 {
   opt.loop = 0;
-  //pcap_breakloop(opt.p);
+  pcap_breakloop(opt.p);
 }
 
 void signal_handler(int n)
