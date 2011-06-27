@@ -144,6 +144,7 @@ typedef struct tcpsession
   } dst;
   struct timeval ts;
   struct tcpsession *stok;
+  struct tcpsession *last;
   struct tcpsession *prev;
   struct tcpsession *next;
 } tcpsession;
@@ -165,6 +166,7 @@ typedef struct tcpsession_pool
 typedef struct miruopt
 {
   pcap_t *p;
+  int  mode;
   int  loop;
   int  color;
   int  lktype;
@@ -183,6 +185,15 @@ typedef struct miruopt
   char lkname[256];
   char lkdesc[256];
   char file[PATH_MAX];
+  uint32_t L2err;
+  uint32_t IPerr;
+  uint32_t TCPerr;
+  uint64_t total_count;
+  uint64_t view_count;
+  uint64_t timeout_count;
+  uint64_t rstbreak_count;
+  struct timeval tv;
+  struct tm     *tm;
 } miruopt;
 
 extern miruopt opt;
