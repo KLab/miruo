@@ -12,10 +12,10 @@ void version()
 void usage()
 {
   version();
-  printf("usage: miruo -m mode [option] [expression]\n");
+  printf("usage: miruo [-m mode] [option] [expression]\n");
   printf("\n");
   printf("  mode\n");
-  printf("   tcp          # tcp session check\n");
+  printf("   tcp          # tcp session check(default)\n");
   printf("   http         # http request monitor(not yet)\n");
   printf("   mysql        # mysql query  monitor(not yet)\n");
   printf("\n");
@@ -29,8 +29,8 @@ void usage()
   printf("   -C1          # color on\n");
   printf("   -R           # find RST break(tcp only)\n");
   printf("   -RR          # find RST close(tcp only)\n");
-  printf("   -L time      # retransmit time limit(Default 100ms)\n");
-  printf("   -S interval  # status view\n");
+  printf("   -t time      # retransmit limit time(Default 1000ms)\n");
+  printf("   -s interval  # statistics view interval(Default 60sec)\n");
   printf("   -r file      # read file(for tcpdump -w)\n");
   printf("   -i interface # \n");
   printf("\n");
@@ -475,7 +475,7 @@ void print_tcpsession(FILE *fp, tcpsession *s)
   }
 }
 
-void miruo_tcp_session_status()
+void miruo_tcp_session_statistics()
 {
   char tstr[32];
   char mstr[64];
@@ -485,7 +485,7 @@ void miruo_tcp_session_status()
   tcpsession *s;
   tcpsession ts;
   static int w = 0;
-  if(opt.statuson == 0){
+  if(opt.stattime == 0){
     return;
   }
   if(w){
@@ -495,7 +495,7 @@ void miruo_tcp_session_status()
     }
   }
 
-  w = opt.statuson;
+  w = opt.stattime;
   size = opt.ts_count * sizeof(tcpsession);
   if(size > 1024 * 1024 * 1024){
     sprintf(mstr, "%lluGB", size / 1024 / 1024 / 1024);
@@ -508,8 +508,8 @@ void miruo_tcp_session_status()
   }
 
   sprintf(tstr, "%02d:%02d:%02d", opt.tm->tm_hour, opt.tm->tm_min, opt.tm->tm_sec);
-  fprintf(stderr, "===== TCP SESSION STATUS =====\n");
-  fprintf(stderr, "Time             : %s\n",   tstr);
+  fprintf(stderr, "===== SESSION STATISTICS =====\n");
+  fprintf(stderr, "Current Time     : %s\n",   tstr);
   fprintf(stderr, "Total Session    : %llu\n", opt.total_count);
   fprintf(stderr, "View Session     : %llu\n", opt.view_count);
   fprintf(stderr, "Timeout Session  : %llu\n", opt.timeout_count);
@@ -1033,9 +1033,11 @@ int miruo_init()
   opt.interval = 1;
   opt.promisc  = 1;
   opt.setalrm  = 1;
+  opt.stattime = 60;
   opt.pksize   = 96;
-  opt.rt_limit = 100;
+  opt.rt_limit = 1000;
   opt.color    = isatty(fileno(stdout));
+  opt.mode     = MIRUO_MODE_TCP_SESSION;
 }
 
 void miruo_setopt(int argc, char *argv[])
@@ -1047,7 +1049,7 @@ void miruo_setopt(int argc, char *argv[])
   F[MIRUO_MODE_TCP_SESSION] = "tcp";
   F[MIRUO_MODE_HTTP]        =  NULL;
   F[MIRUO_MODE_MYSQL]       =  NULL;
-  while((r = getopt_long(argc, argv, "hVvRL:C:S:i:m:r:", get_optlist(), NULL)) != -1){
+  while((r = getopt_long(argc, argv, "hVvRC:t:s:i:m:r:", get_optlist(), NULL)) != -1){
     switch(r){
       case 'h':
         usage();
@@ -1064,13 +1066,13 @@ void miruo_setopt(int argc, char *argv[])
       case 'C':
         opt.color = atoi(optarg);
         break;
-      case 'L':
+      case 't':
         if(atoi(optarg) > 0){
           opt.rt_limit = atoi(optarg);
         }
         break;
-      case 'S':
-        opt.statuson = atoi(optarg);
+      case 's':
+        opt.stattime = atoi(optarg);
         break;
       case 'r':
         strcpy(opt.file, optarg);
@@ -1162,10 +1164,10 @@ void miruo_execute_tcp_session_offline()
     fprintf(stderr, "%s: [error] %s\n", __func__, pcap_geterr(opt.p));
   }
   opt.setalrm  = 1;
-  opt.statuson = 1;
+  opt.stattime = 1;
   gettimeofday(&(opt.tv), NULL);
   opt.tm = localtime(&(opt.tv.tv_sec));
-  miruo_tcp_session_status();
+  miruo_tcp_session_statistics();
   return;
 }
 
@@ -1179,7 +1181,7 @@ void miruo_execute_tcp_session_live(int p)
       opt.setalrm = 0;
       gettimeofday(&(opt.tv), NULL);
       opt.tm = localtime(&(opt.tv.tv_sec));
-      miruo_tcp_session_status();
+      miruo_tcp_session_statistics();
       miruo_tcp_session_timeout();
     }
     if(select(1024, &fds, NULL, NULL, NULL) <= 0){

@@ -180,7 +180,7 @@ typedef struct miruopt
   int  ac_count;
   int  ts_count;
   int  rstclose;
-  int  statuson;
+  int  stattime;
   int  interval;
   int  rt_limit;
   char dev[32];
