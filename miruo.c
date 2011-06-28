@@ -2,7 +2,11 @@
 miruopt opt;
 void version()
 {
+  const char *libpcap = pcap_lib_version();
   printf("miruo version 0.8\n");
+  if(libpcap){
+    printf("%s\n", libpcap);
+  }
 }
 
 void usage()
@@ -346,21 +350,23 @@ tcpsession *get_tcpsession(tcpsession *c)
         c->rno = 0;
       }else{
         s->views = 1;
-        t->view  = 0;
         c->view  = 0;
-        t->color = COLOR_GREEN;
         if((t->optsize != c->optsize) || (memcmp(t->opt, c->opt, c->optsize) != 0)){
           c->color = COLOR_MAGENTA;
         }else{
           c->color = COLOR_RED;
         }
-        t = t->stok;
-        while(t){
-          if(t->color == 0){
-            t->view  = 0;
-            t->color = COLOR_CYAN;
-          }
+        if(opt.verbose < 2){
+          t->view  = 0;
+          t->color = COLOR_GREEN;
           t = t->stok;
+          while(t){
+            if(t->color == 0){
+              t->view  = 0;
+              t->color = COLOR_CYAN;
+            }
+            t = t->stok;
+          }
         }
       }
       break;
@@ -380,7 +386,7 @@ tcpsession *malloc_tcpsession()
     opt.tspool.count--;
   }else{
     if(s = malloc(sizeof(tcpsession))){
-      opt.ts_count++;
+      opt.count_ts++;
     }
   }
   return(s);
@@ -392,7 +398,7 @@ void free_tcpsession(tcpsession *c)
     tcpsession *s = c->stok;
     if(opt.tspool.count > 65535){
       free(c);
-      opt.ts_count--;
+      opt.count_ts--;
     }else{
       if(c->next = opt.tspool.free){
         c->next->prev = c;
@@ -437,7 +443,7 @@ tcpsession *del_tcpsession(tcpsession *c)
       n->prev = p;
     }
   }
-  opt.ac_count--;
+  opt.count_act--;
   free_tcpsession(c);
   return(n);
 }
@@ -487,10 +493,16 @@ tcpsession *stok_tcpsession(tcpsession *c, tcpsession *s)
   return(c->last);
 }
 
-void add_tcpsession(tcpsession *c)
+tcpsession *add_tcpsession(tcpsession *c)
 {
   if(c == NULL){
-    return;
+    return(NULL);
+  }
+  if(opt.count_act < opt.actlimit){
+    c = new_tcpsession(c);
+  }else{
+    opt.count_drop++;
+    return(NULL);
   }
   while(c->next){
     c = c->next;
@@ -499,8 +511,12 @@ void add_tcpsession(tcpsession *c)
     c->next->prev = c;
   }
   opt.tsact = c;
-  opt.ac_count++;
-  opt.total_count++;
+  opt.count_act++;
+  opt.count_total++;
+  if(opt.count_actmax < opt.count_act){
+    opt.count_actmax = opt.count_act;
+  }
+  return(c);
 }
 
 void print_acttcpsession(FILE *fp)
@@ -550,27 +566,49 @@ void print_tcpsession(FILE *fp, tcpsession *c)
     sprintf(cl[0], "\x1b[3%dm", COLOR_YELLOW);
     sprintf(cl[1], "\x1b[39m");
   }
-  fprintf(fp, "%s[%05d] Total %u packets, %u bytes%s\n", cl[0], c->sid, c->stall, c->szall, cl[1]);
+  if(opt.verbose < 2){
+    sprintf(nd[0], "%s:%u", inet_ntoa(c->src.in.sin_addr), c->src.in.sin_port);
+    sprintf(nd[1], "%s:%u", inet_ntoa(c->dst.in.sin_addr), c->dst.in.sin_port);
+    fprintf(fp, "%s[%04X] %12s |%21s == %-21s| Total %u pks, %u bytes%s\n",
+      cl[0], c->sid, "", nd[0], nd[1], c->stall, c->szall, cl[1]);
+  }
   while(c){
     if(c->view == 0){
-      t = localtime(&(c->ts.tv_sec));
-      sprintf(nd[c->sno], "%s:%u", inet_ntoa(c->src.in.sin_addr), c->src.in.sin_port);
-      sprintf(nd[c->rno], "%s:%u", inet_ntoa(c->dst.in.sin_addr), c->dst.in.sin_port);
-      sprintf(st, "%s/%s", tcp_state_str(c->st[c->sno]), tcp_state_str(c->st[c->rno]));
-      sprintf(ts, "%02d:%02d:%02d.%03u", t->tm_hour, t->tm_min, t->tm_sec, c->ts.tv_usec / 1000);
+      cl[0][0] = 0;
+      cl[1][0] = 0;
       if(c->color && opt.color){
         sprintf(cl[0], "\x1b[3%dm", c->color);
         sprintf(cl[1], "\x1b[39m");
-      }else{
-        cl[0][0] = 0;
-        cl[1][0] = 0;
       }
-      fprintf(fp, "%s[%05d] %s %08X/%08X %s %s%s%s %s %-23s <%s>%s\n",
-        cl[0], 
-        c->sid, ts, c->seqno, c->ackno, 
-        nd[0], allow[c->sno], tcp_flag_str(c->flags), allow[c->sno], nd[1], 
-        st, tcp_opt_str(c->opt, c->optsize), 
-        cl[1]);
+      t = localtime(&(c->ts.tv_sec));
+      sprintf(ts, "%02d:%02d:%02d.%03u", t->tm_hour, t->tm_min, t->tm_sec, c->ts.tv_usec / 1000);
+      if(opt.verbose < 2){
+        fprintf(fp, "%s[%04X] %s |%18s %s%s%s %-18s| %08X/%08X <%s>%s\n",
+          cl[0], 
+          c->sid, 
+          ts, 
+          tcp_state_str(c->st[c->sno]),
+          allow[c->sno], tcp_flag_str(c->flags), allow[c->sno],  
+          tcp_state_str(c->st[c->rno]),
+          c->seqno, c->ackno, 
+          tcp_opt_str(c->opt, c->optsize), 
+          cl[1]);
+      }else{
+        sprintf(nd[c->sno], "%s:%u", inet_ntoa(c->src.in.sin_addr), c->src.in.sin_port);
+        sprintf(nd[c->rno], "%s:%u", inet_ntoa(c->dst.in.sin_addr), c->dst.in.sin_port);
+        sprintf(st, "%s/%s", tcp_state_str(c->st[c->sno]), tcp_state_str(c->st[c->rno]));
+        fprintf(fp, "%s[%04X] %s %s %s%s%s %s %-23s %08X/%08X <%s>%s\n",
+          cl[0], 
+          c->sid, 
+          ts,
+          nd[0],
+          allow[c->sno], tcp_flag_str(c->flags), allow[c->sno],  
+          nd[1],
+          st,
+          c->seqno, c->ackno, 
+          tcp_opt_str(c->opt, c->optsize), 
+          cl[1]);
+      }
       c->view = 1;
     }
     c = c->stok;
@@ -592,14 +630,14 @@ void miruo_tcp_session_statistics(int view)
     return;
   }
   if((w > 0) && (view == 0)){
-    w -= opt.interval;
+    w -= opt.itv.it_interval.tv_sec;
     if(w > 0){
       return;
     }
   }
 
   w = opt.stattime;
-  size = opt.ts_count * sizeof(tcpsession);
+  size = opt.count_ts * sizeof(tcpsession);
   if(size > 1024 * 1024 * 1024){
     sprintf(mstr, "%lluGB", size / 1024 / 1024 / 1024);
   }else if(size > 1024 * 1024){
@@ -616,36 +654,49 @@ void miruo_tcp_session_statistics(int view)
   }
   memset(&ps, 0, sizeof(ps));
   pcap_stats(opt.p, &ps);
-  opt.pf_recv   += ps.ps_recv;
-  opt.pf_drop   += ps.ps_drop;
-  opt.pf_ifdrop += ps.ps_ifdrop;
   sprintf(tstr, "%02d:%02d:%02d", opt.tm.tm_hour, opt.tm.tm_min, opt.tm.tm_sec);
   fprintf(stderr, "===== Session Statistics =====\n");
   fprintf(stderr, "Current Time     : %s\n",   tstr);
-  fprintf(stderr, "Total Session    : %llu\n", opt.total_count);
-  fprintf(stderr, "View Session     : %llu\n", opt.view_count);
-  fprintf(stderr, "Timeout Session  : %llu\n", opt.timeout_count);
-  fprintf(stderr, "RST Break Session: %llu\n", opt.rstbreak_count);
-  fprintf(stderr, "ActiveSession    : %u\n",   opt.ac_count);
-  fprintf(stderr, "SessionPool(use) : %u\n",   opt.ts_count - opt.tspool.count);
+  fprintf(stderr, "Total Session    : %llu\n", opt.count_total);
+  fprintf(stderr, "View Session     : %llu\n", opt.count_view);
+  fprintf(stderr, "Timeout Session  : %llu\n", opt.count_timeout);
+  fprintf(stderr, "RST Break Session: %llu\n", opt.count_rstbreak);
+  fprintf(stderr, "ActiveSession    : %u\n",   opt.count_act);
+  fprintf(stderr, "ActiveSessionMax : %u\n",   opt.count_actmax);
+  fprintf(stderr, "DropSession      : %u\n",   opt.count_drop);
+  fprintf(stderr, "SessionPool(use) : %u\n",   opt.count_ts - opt.tspool.count);
   fprintf(stderr, "SessionPool(free): %u\n",   opt.tspool.count);
   fprintf(stderr, "Use memmory size : %s\n",   mstr);
   fprintf(stderr, "===== Captcha Statistics =====\n");
-  fprintf(stderr, "recv  : %llu (+%d)\n", opt.pf_recv,   ps.ps_recv);
-  fprintf(stderr, "drop  : %llu (+%d)\n", opt.pf_drop,   ps.ps_drop);
-  fprintf(stderr, "ifdrop: %llu (+%d)\n", opt.pf_ifdrop, ps.ps_ifdrop);
+  fprintf(stderr, "recv  : %u\n", ps.ps_recv);
+  fprintf(stderr, "drop  : %u\n", ps.ps_drop);
+  fprintf(stderr, "ifdrop: %u\n", ps.ps_ifdrop);
   fprintf(stderr, "===== Error Count Report =====\n");
-  fprintf(stderr, "L2    : %d\n", opt.L2err);
-  fprintf(stderr, "IP    : %d\n", opt.IPerr);
-  fprintf(stderr, "TCP   : %d\n", opt.TCPerr);
+  fprintf(stderr, "L2    : %d\n", opt.err_l2);
+  fprintf(stderr, "IP    : %d\n", opt.err_ip);
+  fprintf(stderr, "TCP   : %d\n", opt.err_tcp);
   fprintf(stderr, "==============================\n");
 }
 
-tcpsession *miruo_tcp_session_destroy(tcpsession *c, char *msg)
+tcpsession *miruo_tcp_session_destroy(tcpsession *c, char *msg, char *reason)
 {
+  int  l;
+  int  r;
+  char sl[32];
+  char sr[32];
   char ts[32];
   char sc[2][8];
-  sprintf(ts, "%02d:%02d:%02d.%03u", opt.tm.tm_hour, opt.tm.tm_min, opt.tm.tm_sec, opt.tv.tv_usec/1000);
+
+  c->views = 1;
+  opt.count_view++;
+  print_tcpsession(stdout, c);
+  l  = 46 - strlen(msg);
+  r  = l / 2;
+  l -= r;
+  memset(sl, 0, sizeof(sl));
+  memset(sr, 0, sizeof(sr));
+  memset(sl, ' ', l);
+  memset(sr, ' ', r);
   if(opt.color){
     sprintf(sc[0], "\x1b[31m");
     sprintf(sc[1], "\x1b[39m");
@@ -653,10 +704,12 @@ tcpsession *miruo_tcp_session_destroy(tcpsession *c, char *msg)
     sc[0][0] = 0;
     sc[1][1] = 0;
   }
-  c->views = 1;
-  opt.view_count++;
-  print_tcpsession(stdout, c);
-  fprintf(stdout, "%s[%05d] %s %s%s\n", sc[0], c->sid, ts, msg, sc[1]);
+  sprintf(ts, "%02d:%02d:%02d.%03u", opt.tm.tm_hour, opt.tm.tm_min, opt.tm.tm_sec, opt.now.tv_usec/1000);
+  if(opt.verbose < 2){
+    fprintf(stdout, "%s[%04X] %s |%s%s%s| %s%s\n", sc[0], c->sid, ts, sl, msg, sr, reason, sc[1]);
+  }else{
+    fprintf(stdout, "%s[%04X] %s %s (%s)%s\n", sc[0], c->sid, ts, msg, reason, sc[1]);
+  }
   return(del_tcpsession(c));
 }
 
@@ -671,15 +724,15 @@ void miruo_tcp_session_timeout()
     return;
   }
   while(t){
-    if((opt.tv.tv_sec - t->ts.tv_sec) > 30){
+    if((opt.now.tv_sec - t->ts.tv_sec) > 30){
       if(t->cs[0] == MIRUO_STATE_TCP_SYN_SENT){
-        opt.timeout_count++;
-        t = miruo_tcp_session_destroy(t, "destroy session (time out)");
+        opt.count_timeout++;
+        t = miruo_tcp_session_destroy(t, "destroy session", "time out");
         continue;
       }
       if(t->cs[0] == MIRUO_STATE_TCP_SYN_RECV){
-        opt.timeout_count++;
-        t = miruo_tcp_session_destroy(t, "destroy session (time out)");
+        opt.count_timeout++;
+        t = miruo_tcp_session_destroy(t, "destroy session", "time out");
         continue;
       }
     }
@@ -690,7 +743,7 @@ void miruo_tcp_session_timeout()
         // 再送時間の最大値を暫定的に30秒とする
         // 30秒以内の再送は検出できるがそれ以上かかった場合は検知できない
         // 30秒でも十分に大きすぎる気がするのでRTOをどうにか計算したほうがいいかな
-        if((opt.tv.tv_sec - s->ts.tv_sec) > 30){
+        if((opt.now.tv_sec - s->ts.tv_sec) > 30){
           r->stok = s->stok;
           s->stok = NULL;
           if(t->last == s){
@@ -709,19 +762,26 @@ void miruo_tcp_session_timeout()
   }
 }
 
-void miruo_tcp_syn(tcpsession *c, tcpsession *s)
+tcpsession *miruo_tcp_syn(tcpsession *c, tcpsession *s)
 {
   if(c == NULL){
-    c = new_tcpsession(s);
-    c->color = COLOR_YELLOW;
+    if(c = add_tcpsession(s)){
+      c->color = COLOR_YELLOW;
+    }else{
+      return(NULL);
+    }
   }else{
     if((c->seqno == s->seqno) && (c->ackno == s->ackno)){
-      return;
+      stok_tcpsession(c, s);
+      return(c);
     }else{
-      miruo_tcp_session_destroy(c, "error break: Duplicate connection");
-      c = new_tcpsession(s);
-      c->color = COLOR_RED;
-      c->views = 1;
+      miruo_tcp_session_destroy(c, "error break", "Duplicate connection");
+      if(c = add_tcpsession(s)){
+        c->color = COLOR_RED;
+        c->views = 1;
+      }else{
+        return(NULL);
+      }
     }
   }
   c->sno = 0;
@@ -730,22 +790,12 @@ void miruo_tcp_syn(tcpsession *c, tcpsession *s)
   c->st[1] = MIRUO_STATE_TCP_LISTEN;
   c->cs[0] = MIRUO_STATE_TCP_SYN_SENT;
   c->cs[1] = MIRUO_STATE_TCP_LISTEN;
-  add_tcpsession(c);
+  return(c);
 }
 
 void miruo_tcp_synack(tcpsession *c, tcpsession *s)
 {
   if(c == NULL){
-    c = new_tcpsession(s);
-    c->sno = 0;
-    c->rno = 1;
-    c->views = 1;
-    c->color = COLOR_RED;
-    c->st[0] = MIRUO_STATE_TCP_SYN_RECV;
-    c->st[1] = MIRUO_STATE_TCP_SYN_SENT;
-    c->cs[0] = MIRUO_STATE_TCP_SYN_RECV;
-    c->cs[1] = MIRUO_STATE_TCP_SYN_SENT;
-    add_tcpsession(c);
     return;
   }
   s = stok_tcpsession(c, s);
@@ -868,12 +918,12 @@ void miruo_tcp_rst(tcpsession *c, tcpsession *s)
   s->st[0] = c->cs[s->sno] = MIRUO_STATE_TCP_CLOSED;
   s->st[1] = c->cs[s->rno] = MIRUO_STATE_TCP_CLOSED;
   s->color = COLOR_RED;
-  c->views = (opt.rstclose > 0);
+  c->views = (opt.rstmode > 0);
   if((s->st[0] == MIRUO_STATE_TCP_CLOSE_WAIT) && (s->st[1] == MIRUO_STATE_TCP_FIN_WAIT1)){
-    c->views = (opt.rstclose > 1);
+    c->views = (opt.rstmode > 1);
   }
   if((s->st[0] == MIRUO_STATE_TCP_CLOSE_WAIT) && (s->st[1] == MIRUO_STATE_TCP_FIN_WAIT2)){
-    c->views = (opt.rstclose > 1);
+    c->views = (opt.rstmode > 1);
   }
 }
 
@@ -883,12 +933,12 @@ void miruo_tcp_rstack(tcpsession *c, tcpsession *s)
     return;
   }
   s = stok_tcpsession(c, s);
-  c->views = (opt.rstclose > 0);
+  c->views = (opt.rstmode > 0);
   if((s->st[0] == MIRUO_STATE_TCP_CLOSE_WAIT) && (s->st[1] == MIRUO_STATE_TCP_FIN_WAIT1)){
-    c->views = (opt.rstclose > 1);
+    c->views = (opt.rstmode > 1);
   }
   if((s->st[0] == MIRUO_STATE_TCP_CLOSE_WAIT) && (s->st[1] == MIRUO_STATE_TCP_FIN_WAIT2)){
-    c->views = (opt.rstclose > 1);
+    c->views = (opt.rstmode > 1);
   }
   s->st[0] = c->cs[s->sno] = MIRUO_STATE_TCP_CLOSED;
   s->st[1] = c->cs[s->rno] = MIRUO_STATE_TCP_CLOSED;
@@ -941,7 +991,7 @@ void miruo_tcp_session(u_char *u, const struct pcap_pkthdr *ph, const u_char *p)
   q = (u_char *)p;
   q = read_l2hdr(&l2, q, &l);
   if(q == NULL){
-    opt.L2err++;
+    opt.err_l2++;
     return; // 不正なフレームは破棄
   }
   if(get_l3type(&l2) != 0x0800){
@@ -950,7 +1000,7 @@ void miruo_tcp_session(u_char *u, const struct pcap_pkthdr *ph, const u_char *p)
 
   q = read_iphdr(&ih, q, &l);
   if(q == NULL){
-    opt.IPerr++;
+    opt.err_ip++;
     return; // 不正なIPヘッダ
   }
   if(ih.offset != 0){
@@ -962,7 +1012,7 @@ void miruo_tcp_session(u_char *u, const struct pcap_pkthdr *ph, const u_char *p)
 
   q = read_tcphdr(&th, q, &l);
   if(q == NULL){
-    opt.TCPerr++;
+    opt.err_tcp++;
     return; // 不正なTCPヘッダ
   }
 
@@ -974,7 +1024,7 @@ void miruo_tcp_session(u_char *u, const struct pcap_pkthdr *ph, const u_char *p)
 
   switch(th.flags & 23){
     case 2:
-      miruo_tcp_syn(c, &s);
+      c = miruo_tcp_syn(c, &s);
       break;
     case 16:
       miruo_tcp_ack(c, &s);
@@ -995,10 +1045,12 @@ void miruo_tcp_session(u_char *u, const struct pcap_pkthdr *ph, const u_char *p)
       miruo_tcp_rstack(c, &s);
       break;
     default:
-      c->views = 1;
-      s.view   = 0;
-      s.color  = COLOR_RED;
-      stok_tcpsession(c, &s);
+      if(c){
+        c->views = 1;
+        s.view   = 0;
+        s.color  = COLOR_RED;
+        stok_tcpsession(c, &s);
+      }
       break;
   }
   if(is_tcpsession_closed(c)){
@@ -1006,7 +1058,7 @@ void miruo_tcp_session(u_char *u, const struct pcap_pkthdr *ph, const u_char *p)
       c->views = 1;
     }
     if(c->views){
-      opt.view_count++;
+      opt.count_view++;
     }
     print_tcpsession(stdout, c);
     del_tcpsession(c);
@@ -1080,7 +1132,7 @@ void signal_handler(int n)
     case SIGUSR2:
       break;
     case SIGALRM:
-      opt.setalrm = 1;
+      opt.alrm = 1;
       break;
   }
 }
@@ -1118,11 +1170,7 @@ void miruo_signal()
 
 void miruo_timer()
 {
-  struct itimerval itv;
-  memset(&itv, 0, sizeof(itv));
-  itv.it_interval.tv_sec = opt.interval;
-  itv.it_value.tv_sec    = opt.interval;
-  if(setitimer(ITIMER_REAL, &itv, NULL) == -1){
+  if(setitimer(ITIMER_REAL, &(opt.itv), NULL) == -1){
     fprintf(stderr, "%s: %s\n", __func__, strerror(errno));
     miruo_finish(1);
   }    
@@ -1132,14 +1180,16 @@ int miruo_init()
 {
   memset(&opt, 0, sizeof(opt));
   opt.loop     = 1;
-  opt.interval = 1;
+  opt.alrm     = 1;
   opt.promisc  = 1;
-  opt.setalrm  = 1;
   opt.stattime = 60;
   opt.pksize   = 96;
   opt.rt_limit = 1000;
+  opt.actlimit = 1024;
   opt.color    = isatty(fileno(stdout));
   opt.mode     = MIRUO_MODE_TCP_SESSION;
+  opt.itv.it_interval.tv_sec = 1;
+  opt.itv.it_value.tv_sec    = 1;
 }
 
 void miruo_setopt(int argc, char *argv[])
@@ -1151,7 +1201,7 @@ void miruo_setopt(int argc, char *argv[])
   F[MIRUO_MODE_TCP_SESSION] = "tcp";
   F[MIRUO_MODE_HTTP]        =  NULL;
   F[MIRUO_MODE_MYSQL]       =  NULL;
-  while((r = getopt_long(argc, argv, "hVvRC:t:s:i:m:r:", get_optlist(), NULL)) != -1){
+  while((r = getopt_long(argc, argv, "hVvRC:a:t:s:i:m:r:", get_optlist(), NULL)) != -1){
     switch(r){
       case 'h':
         usage();
@@ -1163,10 +1213,15 @@ void miruo_setopt(int argc, char *argv[])
         opt.verbose++;
         break;
       case 'R':
-        opt.rstclose++;
+        opt.rstmode++;
         break;
       case 'C':
         opt.color = atoi(optarg);
+        break;
+      case 'a':
+        if(atoi(optarg) > 0){
+          opt.actlimit = atoi(optarg);
+        }
         break;
       case 't':
         if(atoi(optarg) > 0){
@@ -1265,10 +1320,10 @@ void miruo_execute_tcp_session_offline()
   if(pcap_loop(opt.p, 0, miruo_tcp_session, NULL) == -1){
     fprintf(stderr, "%s: [error] %s\n", __func__, pcap_geterr(opt.p));
   }
-  opt.setalrm  = 1;
+  opt.alrm = 1;
   opt.stattime = 1;
-  gettimeofday(&(opt.tv), NULL);
-  memcpy(&(opt.tm), localtime(&(opt.tv.tv_sec)), sizeof(struct tm));
+  gettimeofday(&(opt.now), NULL);
+  memcpy(&(opt.tm), localtime(&(opt.now.tv_sec)), sizeof(struct tm));
   miruo_tcp_session_statistics(1);
   return;
 }
@@ -1279,10 +1334,10 @@ void miruo_execute_tcp_session_live(int p)
   while(opt.loop){
     FD_ZERO(&fds);
     FD_SET(p,&fds);
-    if(opt.setalrm){
-      opt.setalrm = 0;
-      gettimeofday(&(opt.tv), NULL);
-      memcpy(&(opt.tm), localtime(&(opt.tv.tv_sec)), sizeof(struct tm));
+    if(opt.alrm){
+      opt.alrm = 0;
+      gettimeofday(&(opt.now), NULL);
+      memcpy(&(opt.tm), localtime(&(opt.now.tv_sec)), sizeof(struct tm));
       miruo_tcp_session_statistics(0);
       miruo_tcp_session_timeout();
     }

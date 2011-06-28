@@ -156,7 +156,7 @@ typedef struct tcpsession
   uint8_t  cs[2];   // 現在のステータス(ストックでは使用しない)
   uint8_t  st[2];   // パケットを受け取った時点でのステータス
   uint8_t  optsize; // TCPオプションのサイズ
-  uint8_t  opt[40]; // TCPヘッダからコピーしたオプション
+  uint8_t  opt[40]; // TCPヘッダからコピーしたオプションデータ
   union {
     struct sockaddr addr;
     struct sockaddr_in in;
@@ -182,49 +182,50 @@ typedef struct tcpdata
   u_char data[65536];
 } tcpdata;
 
-typedef struct tcpsession_pool
+typedef struct tcpsespool
 {
   uint32_t   count;
   tcpsession *free;
-} tcpsession_pool;
+} tcpsespool;
 
 typedef struct miruopt
 {
   pcap_t *p;
-  int  mode;
-  int  loop;
-  int  color;
-  int  lktype;
-  int  pksize;
-  int  promisc;
-  int  verbose;
-  int  setalrm;
-  int  maxcount;
-  int  ac_count;
-  int  ts_count;
-  int  rstclose;
-  int  stattime;
-  int  interval;
-  int  rt_limit;
-  char dev[32];
-  char exp[1024];
-  char lkname[256];
-  char lkdesc[256];
-  char file[PATH_MAX];
-  uint32_t L2err;
-  uint32_t IPerr;
-  uint32_t TCPerr;
-  uint64_t total_count;
-  uint64_t view_count;
-  uint64_t timeout_count;
-  uint64_t rstbreak_count;
-  uint64_t pf_recv;
-  uint64_t pf_drop;
-  uint64_t pf_ifdrop;
-  tcpsession *tsact;
-  tcpsession_pool tspool;
-  struct tm tm;
-  struct timeval tv;
+  int  loop;               // SININT/SIGTERMが発生したら0になる
+  int  alrm;               // タイマ割り込みが発生したら1になる
+  int  mode;               // 動作モード。mオプションの値で決定
+  int  color;              // カラー表示を有効にするかどうか
+  int  lktype;             // データリンク層の種別
+  int  pksize;             // キャプチャサイズ
+  int  promisc;            // NICをpromiscにするか
+  int  rstmode;            // Rオプションの数
+  int  verbose;            // vオプションの数
+  int  stattime;           // 統計情報を表示する間隔
+  int  rt_limit;           // 再送許容間隔
+  int  actlimit;           // 最大同時接続数
+  char dev[32];            // デバイス名(eth0とかbond0とか)
+  char exp[1024];          // フィルタ文字列
+  char lkname[256];        // データリンク層の名前?
+  char lkdesc[256];        // データリンク層の説明?
+  char file[PATH_MAX];     // オフラインモードで読み込むファイル名
+  uint32_t err_l2;         //
+  uint32_t err_ip;         //
+  uint32_t err_tcp;        //
+  uint32_t count_ts;       //
+  uint32_t count_act;      // 現在の接続数
+  uint32_t count_actmax;   // 瞬間最大接続数
+  uint64_t count_total;    //
+  uint64_t count_view;     //
+  uint64_t count_drop;     //
+  uint64_t count_timeout;  //
+  uint64_t count_rstbreak; //
+  uint64_t count_rstclose; //
+  tcpsession *tsact;       //
+  tcpsespool tspool;       //
+  struct tm tm;            //
+  struct timeval now;      //
+  struct timeval last;     //
+  struct itimerval itv;    //
 } miruopt;
 
 extern miruopt opt;
