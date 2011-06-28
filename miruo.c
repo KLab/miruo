@@ -321,12 +321,14 @@ tcpsession *get_tcpsession(tcpsession *c)
   c->sno = 0;
   c->rno = 1;
   for(s=opt.tsact;s;s=s->next){
-    if((memcmp(&(c->src), &(s->src), sizeof(c->src)) == 0) && (memcmp(&(c->dst), &(s->dst), sizeof(c->dst)) == 0)){
+    if((memcmp(&(c->src), &(s->src), sizeof(c->src)) == 0) && (memcmp(&(c->dst), &(s->dst), sizeof(c->dst)) == 0) && 
+       (c->optsize == s->optsize) && (memcmp(c->opt, s->opt, c->optsize) == 0)){
       c->sno = 0;
       c->rno = 1;
       break;
     }
-    if((memcmp(&(c->src), &(s->dst), sizeof(c->src)) == 0) && (memcmp(&(c->dst), &(s->src), sizeof(c->dst)) == 0)){
+    if((memcmp(&(c->src), &(s->dst), sizeof(c->src)) == 0) && (memcmp(&(c->dst), &(s->src), sizeof(c->dst)) == 0) &&
+       (c->optsize == s->optsize) && (memcmp(c->opt, s->opt, c->optsize) == 0)){
       c->sno = 1;
       c->rno = 0;
       break;
