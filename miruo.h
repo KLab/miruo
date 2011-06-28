@@ -150,11 +150,13 @@ typedef struct tcpsession
   uint8_t  flags;
   uint32_t seqno;
   uint32_t ackno;
-  uint32_t stcnt;
+  uint32_t stcnt;   // 現在保持しているパケット数
+  uint32_t stall;   // このセッションで飛び交った総パケット数
+  uint32_t szall;   // このセッションで飛び交った総データサイズ(L2/L3ヘッダも含む)
   uint8_t  cs[2];   // 現在のステータス(ストックでは使用しない)
   uint8_t  st[2];   // パケットを受け取った時点でのステータス
-  uint8_t  optsize;
-  uint8_t  opt[40];
+  uint8_t  optsize; // TCPオプションのサイズ
+  uint8_t  opt[40]; // TCPヘッダからコピーしたオプション
   union {
     struct sockaddr addr;
     struct sockaddr_in in;
@@ -216,6 +218,9 @@ typedef struct miruopt
   uint64_t view_count;
   uint64_t timeout_count;
   uint64_t rstbreak_count;
+  uint64_t pf_recv;
+  uint64_t pf_drop;
+  uint64_t pf_ifdrop;
   tcpsession *tsact;
   tcpsession_pool tspool;
   struct tm tm;
