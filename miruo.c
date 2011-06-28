@@ -333,8 +333,7 @@ tcpsession *get_tcpsession(tcpsession *c)
     }
   }
   for(t=s;t;t=t->stok){
-    if((t->seqno == c->seqno) && (t->ackno == c->ackno) && (t->flags == c->flags) &&
-       (t->optsize == c->optsize) && (memcmp(t->opt, c->opt, c->optsize) == 0)){
+    if((t->seqno == c->seqno) && (t->ackno == c->ackno) && (t->flags == c->flags)){
       delay  = c->ts.tv_sec;
       delay -= t->ts.tv_sec;
       delay *= 1000000;
@@ -350,7 +349,11 @@ tcpsession *get_tcpsession(tcpsession *c)
         t->view  = 0;
         c->view  = 0;
         t->color = COLOR_GREEN;
-        c->color = COLOR_RED;
+        if((t->optsize != c->optsize) || (memcmp(t->opt, c->opt, c->optsize) != 0)){
+          c->color = COLOR_MAGENTA;
+        }else{
+          c->color = COLOR_RED;
+        }
         t = t->stok;
         while(t){
           if(t->color == 0){
