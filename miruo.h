@@ -216,10 +216,11 @@ typedef struct miruopt
   uint64_t view_count;
   uint64_t timeout_count;
   uint64_t rstbreak_count;
+  tcpsession *tsact;
+  tcpsession_pool tspool;
+  struct tm tm;
   struct timeval tv;
-  struct tm     *tm;
 } miruopt;
 
 extern miruopt opt;
-
 
