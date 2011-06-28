@@ -321,21 +321,20 @@ tcpsession *get_tcpsession(tcpsession *c)
   c->sno = 0;
   c->rno = 1;
   for(s=opt.tsact;s;s=s->next){
-    if((memcmp(&(c->src), &(s->src), sizeof(c->src)) == 0) && (memcmp(&(c->dst), &(s->dst), sizeof(c->dst)) == 0) && 
-       (c->optsize == s->optsize) && (memcmp(c->opt, s->opt, c->optsize) == 0)){
+    if((memcmp(&(c->src), &(s->src), sizeof(c->src)) == 0) && (memcmp(&(c->dst), &(s->dst), sizeof(c->dst)) == 0)){
       c->sno = 0;
       c->rno = 1;
       break;
     }
-    if((memcmp(&(c->src), &(s->dst), sizeof(c->src)) == 0) && (memcmp(&(c->dst), &(s->src), sizeof(c->dst)) == 0) &&
-       (c->optsize == s->optsize) && (memcmp(c->opt, s->opt, c->optsize) == 0)){
+    if((memcmp(&(c->src), &(s->dst), sizeof(c->src)) == 0) && (memcmp(&(c->dst), &(s->src), sizeof(c->dst)) == 0)){
       c->sno = 1;
       c->rno = 0;
       break;
     }
   }
   for(t=s;t;t=t->stok){
-    if((t->seqno == c->seqno) && (t->ackno == c->ackno) && (t->flags == c->flags)){
+    if((t->seqno == c->seqno) && (t->ackno == c->ackno) && (t->flags == c->flags) &&
+       (t->optsize == c->optsize) && (memcmp(t->opt, c->opt, c->optsize) == 0)){
       delay  = c->ts.tv_sec;
       delay -= t->ts.tv_sec;
       delay *= 1000000;
