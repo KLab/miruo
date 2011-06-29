@@ -27,10 +27,13 @@ void usage()
   printf("   -vvv         # most verbose\n");
   printf("   -C0          # color off\n");
   printf("   -C1          # color on\n");
+  printf("   -S0          # not search SYN retransmit\n");
+  printf("   -S1          # search SYN retransmit(default)\n");
   printf("   -R           # find RST break\n");
   printf("   -RR          # find RST close\n");
   printf("   -a num       # active connection limit\n");
-  printf("   -t time      # retransmit limit time(Default 1000ms)\n");
+  printf("   -t time      # retransmit limit(Default 1000ms)\n");
+  printf("   -T time      # long connection view time(Default 0ms = off)\n");
   printf("   -s interval  # statistics view interval(Default 60sec)\n");
   printf("   -r file      # read file(for tcpdump -w)\n");
   printf("   -i interface # \n");
@@ -148,6 +151,43 @@ char *tcp_opt_str(uint8_t *opt, uint8_t optsize)
     strcat(optstr, buf);
   }
   return(optstr);
+}
+
+uint32_t tcp_connection_time(tcpsession *c)
+{
+  uint32_t t;
+  struct timeval ct;
+  timerclear(&ct);
+  if((c != NULL) && (c->last != NULL)){
+    timersub(&(c->last->ts), &(c->ts), &ct);
+  }
+  t  = ct.tv_sec  * 1000;
+  t += ct.tv_usec / 1000;
+  return(t);
+}
+
+int is_tcp_retransmit(tcpsession *c, tcpsession *s)
+{
+  return((s->seqno == c->seqno) && (s->ackno == c->ackno) && (s->flags == c->flags));
+}
+
+int is_tcp_retransmit_ignore(tcpsession *c, tcpsession *s)
+{
+  int64_t delay;
+  if((c->flags & 2) != 0){
+    return(opt.rsynfind == 0);
+  }
+  if(opt.rt_limit == 0){
+    return(1);
+  }
+  delay  = c->ts.tv_sec;
+  delay -= s->ts.tv_sec;
+  delay *= 1000000;
+  delay += c->ts.tv_usec;
+  delay -= s->ts.tv_usec;
+  delay /= 1000;
+  delay  = (delay > 0) ? delay : -delay;
+  return(delay < opt.rt_limit);
 }
 
 /***********************************************************************
@@ -321,7 +361,6 @@ tcpsession *get_tcpsession(tcpsession *c)
 {
   tcpsession *s;
   tcpsession *t;
-  int64_t delay;
 
   c->sno = 0;
   c->rno = 1;
@@ -338,36 +377,29 @@ tcpsession *get_tcpsession(tcpsession *c)
     }
   }
   for(t=s;t;t=t->stok){
-    if((t->seqno == c->seqno) && (t->ackno == c->ackno) && (t->flags == c->flags)){
-      delay  = c->ts.tv_sec;
-      delay -= t->ts.tv_sec;
-      delay *= 1000000;
-      delay += c->ts.tv_usec;
-      delay -= t->ts.tv_usec;
-      delay /= 1000;
-      delay  = (delay > 0) ? delay : -delay;
-      if((delay < opt.rt_limit) && (c->flags != 2)){
+    if(is_tcp_retransmit(t, c)){
+      if(is_tcp_retransmit_ignore(t, c)){
         c->sno = 0;
         c->rno = 0;
+        break;
+      }
+      s->views = 1;
+      c->view  = 0;
+      if((t->optsize != c->optsize) || (memcmp(t->opt, c->opt, c->optsize) != 0)){
+        c->color = COLOR_MAGENTA;
       }else{
-        s->views = 1;
-        c->view  = 0;
-        if((t->optsize != c->optsize) || (memcmp(t->opt, c->opt, c->optsize) != 0)){
-          c->color = COLOR_MAGENTA;
-        }else{
-          c->color = COLOR_RED;
-        }
-        if(opt.verbose < 2){
-          t->view  = 0;
-          t->color = COLOR_GREEN;
-          t = t->stok;
-          while(t){
-            if(t->color == 0){
-              t->view  = 0;
-              t->color = COLOR_CYAN;
-            }
-            t = t->stok;
+        c->color = COLOR_RED;
+      }
+      if(opt.verbose < 2){
+        t->view  = 0;
+        t->color = COLOR_GREEN;
+        t = t->stok;
+        while(t){
+          if(t->color == 0){
+            t->view  = 0;
+            t->color = COLOR_CYAN;
           }
+          t = t->stok;
         }
       }
       break;
@@ -570,18 +602,14 @@ void print_tcpsession(FILE *fp, tcpsession *c)
     sprintf(cl[1], "\x1b[39m");
   }
   if(opt.verbose < 2){
-    struct timeval ct;
-    timerclear(&ct);
-    if((c != NULL) && (c->last != NULL)){
-      timersub(&(c->last->ts), &(c->ts), &ct);
-    }
+    uint32_t ct = tcp_connection_time(c);
     sprintf(ip[0], "%s:%u", inet_ntoa(c->src.in.sin_addr), c->src.in.sin_port);
     sprintf(ip[1], "%s:%u", inet_ntoa(c->dst.in.sin_addr), c->dst.in.sin_port);
     fprintf(fp, "%s[%04X] %8u.%03u |%21s == %-21s| Total %u pks, %u bytes%s\n",
       cl[0],
         c->sid, 
-        ct.tv_sec,
-        ct.tv_usec / 1000, 
+        ct / 1000,
+        ct % 1000,
         ip[0], ip[1], 
         c->stall, c->szall, 
       cl[1]);
@@ -1111,6 +1139,9 @@ void miruo_tcp_session(u_char *u, const struct pcap_pkthdr *ph, const u_char *p)
     if(opt.verbose > 0){
       c->views = 1;
     }
+    if(opt.ct_limit && (tcp_connection_time(c) > opt.ct_limit)){
+      c->views = 1;
+    }
     if(c->views){
       opt.count_view++;
     }
@@ -1236,8 +1267,10 @@ int miruo_init()
   opt.loop     = 1;
   opt.alrm     = 1;
   opt.promisc  = 1;
+  opt.rsynfind = 1;
   opt.stattime = 60;
   opt.pksize   = 96;
+  opt.ct_limit = 1;
   opt.rt_limit = 1000;
   opt.actlimit = 1024;
   opt.color    = isatty(fileno(stdout));
@@ -1255,7 +1288,7 @@ void miruo_setopt(int argc, char *argv[])
   F[MIRUO_MODE_TCP_SESSION] = "tcp";
   F[MIRUO_MODE_HTTP]        =  NULL;
   F[MIRUO_MODE_MYSQL]       =  NULL;
-  while((r = getopt_long(argc, argv, "hVvRC:a:t:s:i:m:r:", get_optlist(), NULL)) != -1){
+  while((r = getopt_long(argc, argv, "hVvRS:C:a:T:t:s:i:m:r:", get_optlist(), NULL)) != -1){
     switch(r){
       case 'h':
         usage();
@@ -1269,6 +1302,9 @@ void miruo_setopt(int argc, char *argv[])
       case 'R':
         opt.rstmode++;
         break;
+      case 'S':
+        opt.rsynfind = atoi(optarg);
+        break;
       case 'C':
         opt.color = atoi(optarg);
         break;
@@ -1277,10 +1313,13 @@ void miruo_setopt(int argc, char *argv[])
           opt.actlimit = atoi(optarg);
         }
         break;
-      case 't':
+      case 'T':
         if(atoi(optarg) > 0){
-          opt.rt_limit = atoi(optarg);
+          opt.ct_limit = atoi(optarg);
         }
+        break;
+      case 't':
+        opt.rt_limit = atoi(optarg);
         break;
       case 's':
         opt.stattime = atoi(optarg);

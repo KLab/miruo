@@ -200,8 +200,10 @@ typedef struct miruopt
   int  promisc;            // NICをpromiscにするか
   int  rstmode;            // Rオプションの数
   int  verbose;            // vオプションの数
+  int  rsynfind;           // SYNの再送を必ず検出するフラグ
   int  stattime;           // 統計情報を表示する間隔
-  int  rt_limit;           // 再送許容間隔
+  int  rt_limit;           // 再送許容間隔(ms)
+  int  ct_limit;           // これいじょう時間がかかったら表示(ms)
   int  actlimit;           // 最大同時接続数
   char dev[32];            // デバイス名(eth0とかbond0とか)
   char exp[1024];          // フィルタ文字列
