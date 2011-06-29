@@ -3,7 +3,7 @@ miruopt opt;
 void version()
 {
   const char *libpcap = pcap_lib_version();
-  printf("miruo version 0.8\n");
+  printf("miruo version 0.9\n");
   if(libpcap){
     printf("%s\n", libpcap);
   }
@@ -29,6 +29,7 @@ void usage()
   printf("   -C1          # color on\n");
   printf("   -R           # find RST break\n");
   printf("   -RR          # find RST close\n");
+  printf("   -a num       # active connection limit\n");
   printf("   -t time      # retransmit limit time(Default 1000ms)\n");
   printf("   -s interval  # statistics view interval(Default 60sec)\n");
   printf("   -r file      # read file(for tcpdump -w)\n");
@@ -344,7 +345,7 @@ tcpsession *get_tcpsession(tcpsession *c)
       delay += c->ts.tv_usec;
       delay -= t->ts.tv_usec;
       delay /= 1000;
-      delay  = abs(delay);
+      delay  = (delay > 0) ? delay : -delay;
       if((delay < opt.rt_limit) && (c->flags != 2)){
         c->sno = 0;
         c->rno = 0;
@@ -547,15 +548,17 @@ void print_acttcpsession(FILE *fp)
 
 void print_tcpsession(FILE *fp, tcpsession *c)
 {
-  struct tm *t;
-  char st[256];
-  char ts[256];
-  char cl[2][16];
-  char nd[2][64];
-  char *allow[] = {">", "<"};
+  struct tm *t;               //
+  char st[256];               // TCPステータス
+  char ts[256];               // タイムスタンプ
+  char cl[2][16];             // 色指定用ESCシーケンス
+  char ip[2][64];             // IPアドレス
+  char *allow[] = {">", "<"}; //
+
   if(c == NULL){
     return;
   }
+
   if(c->views == 0){
     return;
   }
@@ -567,10 +570,21 @@ void print_tcpsession(FILE *fp, tcpsession *c)
     sprintf(cl[1], "\x1b[39m");
   }
   if(opt.verbose < 2){
-    sprintf(nd[0], "%s:%u", inet_ntoa(c->src.in.sin_addr), c->src.in.sin_port);
-    sprintf(nd[1], "%s:%u", inet_ntoa(c->dst.in.sin_addr), c->dst.in.sin_port);
-    fprintf(fp, "%s[%04X] %12s |%21s == %-21s| Total %u pks, %u bytes%s\n",
-      cl[0], c->sid, "", nd[0], nd[1], c->stall, c->szall, cl[1]);
+    struct timeval ct;
+    timerclear(&ct);
+    if((c != NULL) && (c->last != NULL)){
+      timersub(&(c->last->ts), &(c->ts), &ct);
+    }
+    sprintf(ip[0], "%s:%u", inet_ntoa(c->src.in.sin_addr), c->src.in.sin_port);
+    sprintf(ip[1], "%s:%u", inet_ntoa(c->dst.in.sin_addr), c->dst.in.sin_port);
+    fprintf(fp, "%s[%04X] %8u.%03u |%21s == %-21s| Total %u pks, %u bytes%s\n",
+      cl[0],
+        c->sid, 
+        ct.tv_sec,
+        ct.tv_usec / 1000, 
+        ip[0], ip[1], 
+        c->stall, c->szall, 
+      cl[1]);
   }
   while(c){
     if(c->view == 0){
@@ -585,28 +599,28 @@ void print_tcpsession(FILE *fp, tcpsession *c)
       if(opt.verbose < 2){
         fprintf(fp, "%s[%04X] %s |%18s %s%s%s %-18s| %08X/%08X <%s>%s\n",
           cl[0], 
-          c->sid, 
-          ts, 
-          tcp_state_str(c->st[c->sno]),
-          allow[c->sno], tcp_flag_str(c->flags), allow[c->sno],  
-          tcp_state_str(c->st[c->rno]),
-          c->seqno, c->ackno, 
-          tcp_opt_str(c->opt, c->optsize), 
+            c->sid, 
+            ts, 
+            tcp_state_str(c->st[c->sno]),
+            allow[c->sno], tcp_flag_str(c->flags), allow[c->sno],  
+            tcp_state_str(c->st[c->rno]),
+            c->seqno, c->ackno, 
+            tcp_opt_str(c->opt, c->optsize), 
           cl[1]);
       }else{
-        sprintf(nd[c->sno], "%s:%u", inet_ntoa(c->src.in.sin_addr), c->src.in.sin_port);
-        sprintf(nd[c->rno], "%s:%u", inet_ntoa(c->dst.in.sin_addr), c->dst.in.sin_port);
+        sprintf(ip[c->sno], "%s:%u", inet_ntoa(c->src.in.sin_addr), c->src.in.sin_port);
+        sprintf(ip[c->rno], "%s:%u", inet_ntoa(c->dst.in.sin_addr), c->dst.in.sin_port);
         sprintf(st, "%s/%s", tcp_state_str(c->st[c->sno]), tcp_state_str(c->st[c->rno]));
         fprintf(fp, "%s[%04X] %s %s %s%s%s %s %-23s %08X/%08X <%s>%s\n",
           cl[0], 
-          c->sid, 
-          ts,
-          nd[0],
-          allow[c->sno], tcp_flag_str(c->flags), allow[c->sno],  
-          nd[1],
-          st,
-          c->seqno, c->ackno, 
-          tcp_opt_str(c->opt, c->optsize), 
+            c->sid, 
+            ts,
+            ip[0],
+            allow[c->sno], tcp_flag_str(c->flags), allow[c->sno],  
+            ip[1],
+            st,
+            c->seqno, c->ackno, 
+            tcp_opt_str(c->opt, c->optsize), 
           cl[1]);
       }
       c->view = 1;
@@ -725,23 +739,35 @@ void miruo_tcp_session_timeout()
   }
   while(t){
     if((opt.now.tv_sec - t->ts.tv_sec) > 30){
-      if(t->cs[0] == MIRUO_STATE_TCP_SYN_SENT){
-        opt.count_timeout++;
-        t = miruo_tcp_session_destroy(t, "destroy session", "time out");
-        continue;
+      switch(t->cs[0]){
+        case MIRUO_STATE_TCP_SYN_SENT:
+        case MIRUO_STATE_TCP_SYN_RECV:
+        case MIRUO_STATE_TCP_FIN_WAIT1:
+        case MIRUO_STATE_TCP_FIN_WAIT2:
+        case MIRUO_STATE_TCP_CLOSE_WAIT:
+        case MIRUO_STATE_TCP_LAST_ACK:
+          opt.count_timeout++;
+          t = miruo_tcp_session_destroy(t, "destroy session", "time out");
+          continue;
       }
-      if(t->cs[0] == MIRUO_STATE_TCP_SYN_RECV){
-        opt.count_timeout++;
-        t = miruo_tcp_session_destroy(t, "destroy session", "time out");
-        continue;
+      switch(t->cs[1]){
+        case MIRUO_STATE_TCP_SYN_SENT:
+        case MIRUO_STATE_TCP_SYN_RECV:
+        case MIRUO_STATE_TCP_FIN_WAIT1:
+        case MIRUO_STATE_TCP_FIN_WAIT2:
+        case MIRUO_STATE_TCP_CLOSE_WAIT:
+        case MIRUO_STATE_TCP_LAST_ACK:
+          opt.count_timeout++;
+          t = miruo_tcp_session_destroy(t, "destroy session", "time out");
+          continue;
       }
     }
     r = t;
     s = t->stok;
     while(s){
       if(s->view){
-        // 再送時間の最大値を暫定的に30秒とする
-        // 30秒以内の再送は検出できるがそれ以上かかった場合は検知できない
+        // 再送時間の最長を暫定的に30秒として、それ以前に受け取ったパケットを破棄
+        // そのため30秒以内の再送は検出できるがそれ以上かかった場合は検知できない
         // 30秒でも十分に大きすぎる気がするのでRTOをどうにか計算したほうがいいかな
         if((opt.now.tv_sec - s->ts.tv_sec) > 30){
           r->stok = s->stok;
@@ -787,9 +813,9 @@ tcpsession *miruo_tcp_syn(tcpsession *c, tcpsession *s)
   c->sno = 0;
   c->rno = 1;
   c->st[0] = MIRUO_STATE_TCP_SYN_SENT;
-  c->st[1] = MIRUO_STATE_TCP_LISTEN;
+  c->st[1] = MIRUO_STATE_TCP_SYN_RECV;
   c->cs[0] = MIRUO_STATE_TCP_SYN_SENT;
-  c->cs[1] = MIRUO_STATE_TCP_LISTEN;
+  c->cs[1] = MIRUO_STATE_TCP_SYN_RECV;
   return(c);
 }
 
@@ -800,8 +826,7 @@ void miruo_tcp_synack(tcpsession *c, tcpsession *s)
   }
   s = stok_tcpsession(c, s);
   switch(s->st[0]){
-    case MIRUO_STATE_TCP_LISTEN:
-      s->st[0] = c->cs[s->sno] = MIRUO_STATE_TCP_SYN_RECV;
+    case MIRUO_STATE_TCP_SYN_RECV:
       break;
     default:
       c->views = 1;
@@ -830,13 +855,21 @@ void miruo_tcp_ack(tcpsession *c, tcpsession *s)
   s = stok_tcpsession(c, s);
   s->view = (opt.verbose < 2) && (s->color == 0);
   switch(s->st[0]){
+    case MIRUO_STATE_TCP_EST:
+      if(s->st[1] == MIRUO_STATE_TCP_FIN_WAIT1){
+        s->st[0] = c->cs[s->sno] = MIRUO_STATE_TCP_CLOSE_WAIT;
+        s->view  = 0;
+      }
+      break;
     case MIRUO_STATE_TCP_SYN_RECV:
       s->st[0] = c->cs[s->sno] = MIRUO_STATE_TCP_EST;
       s->view  = 0;
       break;
     case MIRUO_STATE_TCP_FIN_WAIT2:
-      s->st[0] = c->cs[s->sno] = MIRUO_STATE_TCP_TIME_WAIT;
-      s->view  = 0;
+      if(s->st[1] == MIRUO_STATE_TCP_LAST_ACK){
+        s->st[0] = c->cs[s->sno] = MIRUO_STATE_TCP_TIME_WAIT;
+        s->view  = 0;
+      }
       break;
   }
   switch(s->st[1]){
@@ -870,14 +903,21 @@ void miruo_tcp_fin(tcpsession *c, tcpsession *s)
       break;
     case MIRUO_STATE_TCP_CLOSE_WAIT:
       s->st[0] = c->cs[s->sno] = MIRUO_STATE_TCP_LAST_ACK;
+    default:
+      c->views = 1;
+      s->view  = 0;
+      s->color = COLOR_RED;
       break;
   }
   switch(s->st[1]){
     case MIRUO_STATE_TCP_EST:
-      s->st[1] = c->cs[s->rno] = MIRUO_STATE_TCP_CLOSE_WAIT;
       break;
     case MIRUO_STATE_TCP_FIN_WAIT2:
       s->st[1] = c->cs[s->rno] = MIRUO_STATE_TCP_TIME_WAIT;
+    default:
+      c->views = 1;
+      s->view  = 0;
+      s->color = COLOR_RED;
       break;
   }
 }
@@ -893,19 +933,33 @@ void miruo_tcp_finack(tcpsession *c, tcpsession *s)
       s->st[0] = c->cs[s->sno] = MIRUO_STATE_TCP_FIN_WAIT1;
       break;
     case MIRUO_STATE_TCP_EST:
-      s->st[0] = c->cs[s->sno] = MIRUO_STATE_TCP_FIN_WAIT1;
+      if(s->st[1] == MIRUO_STATE_TCP_EST){
+        s->st[0] = c->cs[s->sno] = MIRUO_STATE_TCP_FIN_WAIT1;
+      }
+      if(s->st[1] == MIRUO_STATE_TCP_FIN_WAIT1){
+        s->st[0] = c->cs[s->sno] = MIRUO_STATE_TCP_LAST_ACK;
+      }
       break;
     case MIRUO_STATE_TCP_CLOSE_WAIT:
       s->st[0] = c->cs[s->sno] = MIRUO_STATE_TCP_LAST_ACK;
       break;
+    default:
+      c->views = 1;
+      s->view  = 0;
+      s->color = COLOR_RED;
   }
   switch(s->st[1]){
     case MIRUO_STATE_TCP_EST:
-      s->st[1] = c->cs[s->rno] = MIRUO_STATE_TCP_CLOSE_WAIT;
       break;
     case MIRUO_STATE_TCP_FIN_WAIT1:
       s->st[1] = c->cs[s->rno] = MIRUO_STATE_TCP_FIN_WAIT2;
       break;
+    case MIRUO_STATE_TCP_FIN_WAIT2:
+      break;
+    default:
+      c->views = 1;
+      s->view  = 0;
+      s->color = COLOR_RED;
   }
 }
 
