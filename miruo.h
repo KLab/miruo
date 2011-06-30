@@ -1,4 +1,5 @@
 #include<stdio.h>
+#include<unistd.h>
 #include<stdlib.h>
 #include<stdint.h>
 #include<string.h>
@@ -7,9 +8,12 @@
 #include<getopt.h>
 #include<signal.h>
 #include<errno.h>
+#include<fcntl.h>
 #include<time.h>
 #include<sys/time.h>
+#include<sys/resource.h>
 #include<sys/types.h>
+#include<sys/stat.h>
 #include<sys/socket.h>
 #include<sys/time.h>
 #include<netinet/in.h>
@@ -141,15 +145,17 @@ typedef struct tcphdr
 
 typedef struct tcpsession
 {
-  uint16_t sid;
-  uint8_t  sno;
-  uint8_t  rno;
-  uint8_t  view;
-  uint8_t  views;
-  uint8_t  color;
-  uint8_t  flags;
-  uint32_t seqno;
-  uint32_t ackno;
+  uint16_t sid;     //
+  uint8_t  sno;     //
+  uint8_t  rno;     //
+  uint16_t pno;     //
+  uint8_t  view;    //
+  uint8_t  views;   //
+  uint8_t  color;   //
+  uint8_t  flags;   //
+  uint16_t psize;   //
+  uint32_t seqno;   //
+  uint32_t ackno;   //
   uint32_t stcnt;   // 現在保持しているパケット数
   uint32_t stall;   // このセッションで飛び交った総パケット数
   uint32_t szall;   // このセッションで飛び交った総データサイズ(L2/L3ヘッダも含む)
@@ -188,6 +194,16 @@ typedef struct tcpsespool
   tcpsession *free;
 } tcpsespool;
 
+typedef struct meminfo
+{
+  uint64_t   vsz;
+  uint64_t   res;
+  uint64_t share;
+  uint64_t  text;
+  uint64_t  data;
+  long page_size;
+} meminfo;
+
 typedef struct miruopt
 {
   pcap_t *p;
@@ -200,10 +216,11 @@ typedef struct miruopt
   int  promisc;            // NICをpromiscにするか
   int  rstmode;            // Rオプションの数
   int  verbose;            // vオプションの数
+  int  showdata;           //
   int  rsynfind;           // SYNの再送を必ず検出するフラグ
   int  stattime;           // 統計情報を表示する間隔
   int  rt_limit;           // 再送許容間隔(ms)
-  int  ct_limit;           // これいじょう時間がかかったら表示(ms)
+  int  ct_limit;           // これ以上時間がかかったら表示(ms)
   int  actlimit;           // 最大同時接続数
   char dev[32];            // デバイス名(eth0とかbond0とか)
   char exp[1024];          // フィルタ文字列
@@ -225,9 +242,11 @@ typedef struct miruopt
   tcpsession *tsact;       //
   tcpsespool tspool;       //
   struct tm tm;            //
-  struct timeval now;      //
-  struct timeval last;     //
-  struct itimerval itv;    //
+  struct rusage  now_rs;   //
+  struct rusage  old_rs;   //
+  struct timeval now_tv;   //
+  struct timeval old_tv;   //
+  struct itimerval  itv;   //
 } miruopt;
 
 extern miruopt opt;
