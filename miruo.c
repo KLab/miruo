@@ -13,13 +13,7 @@ void version()
 void usage()
 {
   version();
-  printf("usage: miruo [-m mode] [option] [expression]\n");
-  printf("\n");
-  printf("  mode\n");
-  printf("   tcp          # tcp  session check   (default)\n");
-  printf("   http         # http request monitor (not yet)\n");
-  printf("   mysql        # mysql query  monitor (not yet)\n");
-  printf("\n");
+  printf("usage: miruo [option] [expression]\n");
   printf("  option\n");
   printf("   -h           # help\n");
   printf("   -V           # version\n");
@@ -28,13 +22,12 @@ void usage()
   printf("   -vvv         # most verbose\n");
   printf("   -C0          # color off\n");
   printf("   -C1          # color on\n");
-  printf("   -D0          # hide data\n");
-  printf("   -D1          # show data\n");
   printf("   -S0          # not search SYN retransmit\n");
   printf("   -S1          # search SYN retransmit(default)\n");
   printf("   -R0          # ignore RST break\n");
   printf("   -R1          # find   RST break (default)\n");
   printf("   -R2          # find   RST close\n");
+  printf("   -D num       # show data packets\n");
   printf("   -a num       # active connection limit\n");
   printf("   -t time      # retransmit limit(Default 1000ms)\n");
   printf("   -T time      # long connection view time(Default 0ms = off)\n");
