@@ -49,33 +49,6 @@
 #define MIRUO_STATE_TCP_CLOSED     9
 #define MIRUO_STATE_TCP_TIME_WAIT  10
 
-typedef struct L7data{
-  uint64_t session;
-  uint32_t tcpstate;
-  uint8_t data[65536];
-  struct L7data *prev;
-  struct L7data *next;
-} L7data;
-
-typedef struct TCPdata{
-  uint32_t saddr;
-  uint32_t daddr;
-  uint16_t sport;
-  uint16_t dport;
-  uint8_t data[65536];
-  struct TCPdata *prev;
-  struct TCPdata *next;
-} TCPdata;
-
-typedef struct IPdata{
-  uint16_t id;
-  uint32_t saddr;
-  uint32_t daddr;
-  uint8_t data[65536];
-  struct IPdata *prev;
-  struct IPdata *next;
-} IPdata;
-
 typedef struct ethhdr{
   uint8_t  smac[6];
   uint8_t  dmac[6];
@@ -94,7 +67,7 @@ typedef struct l2hdr{
   } hdr;
 } l2hdr;
 
-typedef struct iphdr_row
+typedef struct iprawhdr
 {
   uint8_t  vih;
   uint8_t  tos;
@@ -106,10 +79,11 @@ typedef struct iphdr_row
   uint16_t checksum;
   uint32_t src;
   uint32_t dst;
-} iphdr_row;
+} iphdraw;
 
 typedef struct iphdr
 {
+  l2hdr    l2;
   uint8_t  Ver;
   uint8_t  IHL;
   uint8_t  TOS;
@@ -125,15 +99,32 @@ typedef struct iphdr
   uint8_t option[40];
 } iphdr;
 
-typedef struct ipdata
+typedef struct ipstok
 {
-  struct timeval ts;
-  iphdr  h;
-  u_char d[65536];
-} ipdata;
+  iphdr          head;
+  uint8_t data[65536];
+  struct ipstok *prev;
+  struct ipstok *next;
+  struct timeval time;
+} ipstok;
+
+typedef struct tcprawhdr
+{
+  uint16_t sport;
+  uint16_t dport;
+  uint32_t seqno;
+  uint32_t ackno;
+  uint8_t  offset;
+  uint8_t  flags;
+  uint16_t window;
+  uint16_t checksum;
+  uint16_t urgent;
+  uint8_t opt[40];
+} tcphdraw;
 
 typedef struct tcphdr
 {
+  iphdr    ip;
   uint16_t sport;
   uint16_t dport;
   uint32_t seqno;
@@ -146,50 +137,47 @@ typedef struct tcphdr
   uint8_t opt[40];
 } tcphdr;
 
+typedef struct tcppacket
+{
+  uint8_t  color;         //
+  uint8_t  view;          //
+  uint16_t pno;           //
+  uint8_t  sno;           //
+  uint8_t  rno;           //
+  uint8_t  st[2];         // ステータス
+  uint8_t  flags;         //
+  uint16_t size;          // 
+  uint32_t seqno;         // シーケンス番号
+  uint32_t ackno;         // 応答番号
+  uint8_t  optsize;       // TCPオプションのサイズ
+  uint8_t  opt[40];       // TCPヘッダからコピーしたオプションデータ
+  struct timeval ts;      //
+  struct tcppacket *prev; //
+  struct tcppacket *next; //
+} tcppacket;
+
 typedef struct tcpsession
 {
-  uint16_t sid;     //
-  uint8_t  sno;     //
-  uint8_t  rno;     //
-  uint16_t pno;     //
-  uint8_t  view;    //
-  uint8_t  views;   //
-  uint8_t  color;   //
-  uint8_t  flags;   //
-  uint16_t psize;   //
-  uint32_t seqno;   //
-  uint32_t ackno;   //
-  uint32_t stcnt;   // 現在保持しているパケット数
-  uint32_t stall;   // このセッションで飛び交った総パケット数
-  uint32_t szall;   // このセッションで飛び交った総データサイズ(L2/L3ヘッダも含む)
-  uint8_t  cs[2];   // 現在のステータス(ストックでは使用しない)
-  uint8_t  st[2];   // パケットを受け取った時点でのステータス
-  uint8_t  optsize; // TCPオプションのサイズ
-  uint8_t  opt[40]; // TCPヘッダからコピーしたオプションデータ
-  union {
-    struct sockaddr addr;
-    struct sockaddr_in in;
-    struct sockaddr_storage storage;
-  } src;
-  union {
-    struct sockaddr addr;
-    struct sockaddr_in in;
-    struct sockaddr_storage storage;
-  } dst;
-  struct timeval ts;
-  struct tcpsession *stok;
-  struct tcpsession *last;
-  struct tcpsession *prev;
-  struct tcpsession *next;
+  uint16_t   sid;           //
+  uint8_t   view;           //
+  uint32_t pkcnt;           // 現在保持しているパケット数
+  uint32_t pkall;           // このセッションで飛び交った総パケット数
+  uint32_t szall;           // このセッションで飛び交った総データサイズ(L2/L3ヘッダも含む)
+  uint8_t  st[2];           // 現在のステータス
+  struct sockaddr_in ip[2]; // 0=接続元 1=接続先
+  struct tcppacket  packet; //
+  struct tcppacket   *last; //
+  struct tcpsession  *prev; //
+  struct tcpsession  *next; //
 } tcpsession;
 
-typedef struct tcpdata
+typedef struct tcppktpool
 {
-  struct timeval ts;
-  iphdr  ih;
-  tcphdr th;
-  u_char data[65536];
-} tcpdata;
+  uint32_t   block;
+  uint32_t   count;
+  tcppacket  *free;
+  tcppacket **pool;
+} tcppktpool;
 
 typedef struct tcpsespool
 {
@@ -224,7 +212,8 @@ typedef struct miruopt
   int  stattime;           // 統計情報を表示する間隔
   int  rt_limit;           // 再送許容間隔(ms)
   int  ct_limit;           // これ以上時間がかかったら表示(ms)
-  int  actlimit;           // 最大同時接続数
+  int  ts_limit;           // 最大同時接続数
+  int  tp_limit;           // 保持するパケット数の最大数
   char dev[32];            // デバイス名(eth0とかbond0とか)
   char exp[1024];          // フィルタ文字列
   char lkname[256];        // データリンク層の名前?
@@ -233,17 +222,20 @@ typedef struct miruopt
   uint32_t err_l2;         //
   uint32_t err_ip;         //
   uint32_t err_tcp;        //
-  uint32_t count_ts;       //
+  uint32_t count_ts;       // tcpsessionオブジェクト数(未使用分も含む)
   uint32_t count_act;      // 現在の接続数
   uint32_t count_actmax;   // 瞬間最大接続数
+  uint32_t count_tp_act;   // 使用中のtcppacketオブジェクト数
   uint64_t count_total;    //
   uint64_t count_view;     //
-  uint64_t count_drop;     //
+  uint64_t count_ts_drop;  // TCPセッションの確保ができなかった数
+  uint64_t count_tp_drop;  // TCPパケットを保持できなかった数
   uint64_t count_timeout;  //
   uint64_t count_rstbreak; //
   uint64_t count_rstclose; //
   tcpsession *tsact;       //
   tcpsespool tspool;       //
+  tcppktpool tppool;       //
   struct tm tm;            //
   struct rusage  now_rs;   //
   struct rusage  old_rs;   //
