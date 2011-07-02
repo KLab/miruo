@@ -202,6 +202,7 @@ typedef struct miruopt
   int  loop;               // SININT/SIGTERMが発生したら0になる
   int  mode;               // 動作モード。mオプションの値で決定
   int  live;               // 1ならリアルタイム表示をする
+  int  quite;              // 疑わしきは罰しないモード
   int  color;              // カラー表示を有効にするかどうか
   int  lktype;             // データリンク層の種別
   int  pksize;             // キャプチャサイズ
