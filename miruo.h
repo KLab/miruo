@@ -18,7 +18,7 @@
 #include<sys/types.h>
 #include<sys/stat.h>
 #include<sys/socket.h>
-#include<sys/time.h>
+#include<sys/epoll.h>
 #include<netinet/in.h>
 #include<arpa/inet.h>
 #include<pcap.h>
@@ -137,47 +137,48 @@ typedef struct tcphdr
   uint8_t opt[40];
 } tcphdr;
 
-typedef struct tcppacket
+typedef struct tcpsegment
 {
-  uint8_t  color;         //
-  uint8_t  view;          //
-  uint16_t pno;           //
-  uint8_t  sno;           //
-  uint8_t  rno;           //
-  uint8_t  st[2];         // ステータス
-  uint8_t  flags;         //
-  uint16_t size;          // 
-  uint32_t seqno;         // シーケンス番号
-  uint32_t ackno;         // 応答番号
-  uint8_t  optsize;       // TCPオプションのサイズ
-  uint8_t  opt[40];       // TCPヘッダからコピーしたオプションデータ
-  struct timeval ts;      //
-  struct tcppacket *prev; //
-  struct tcppacket *next; //
-} tcppacket;
+  uint8_t  color;          //
+  uint8_t  view;           //
+  uint8_t  sno;            //
+  uint8_t  rno;            //
+  uint8_t  st[2];          // ステータス
+  uint8_t  flags;          //
+  uint16_t segsz;          // セグメントサイズ
+  uint16_t segno;          // セグメント番号
+  uint32_t seqno;          // シーケンス番号
+  uint32_t ackno;          // 応答番号
+  uint8_t  optsize;        // TCPオプションのサイズ
+  uint8_t  opt[40];        // TCPヘッダからコピーしたオプションデータ
+  struct timeval ts;       //
+  struct tcpsegment *prev; //
+  struct tcpsegment *next; //
+} tcpsegment;
 
 typedef struct tcpsession
 {
-  uint16_t   sid;           //
-  uint8_t   view;           //
-  uint32_t pkcnt;           // 現在保持しているパケット数
-  uint32_t pkall;           // このセッションで飛び交った総パケット数
-  uint32_t szall;           // このセッションで飛び交った総データサイズ(L2/L3ヘッダも含む)
-  uint8_t  st[2];           // 現在のステータス
-  struct sockaddr_in ip[2]; // 0=接続元 1=接続先
-  struct tcppacket  packet; //
-  struct tcppacket   *last; //
-  struct tcpsession  *prev; //
-  struct tcpsession  *next; //
+  uint16_t   sid;            //
+  uint8_t   view;            //
+  uint32_t pkcnt;            // 現在保持しているパケット数
+  uint32_t pkall;            // このセッションで飛び交った総パケット数
+  uint32_t szall;            // このセッションで飛び交った総データサイズ(L2/L3ヘッダも含む)
+  uint8_t  st[2];            // 現在のステータス
+  uint32_t sq[2];            // シーケンス番号の初期値
+  struct sockaddr_in ip[2];  // 0=接続元 1=接続先
+  struct tcpsegment segment; // 先頭のセグメント
+  struct tcpsegment *last;   // 最後のセグメント
+  struct tcpsession *prev;   // 前のセッション
+  struct tcpsession *next;   // 次のセッション
 } tcpsession;
 
-typedef struct tcppktpool
+typedef struct tcpsegpool
 {
   uint32_t   block;
   uint32_t   count;
-  tcppacket  *free;
-  tcppacket **pool;
-} tcppktpool;
+  tcpsegment  *free;
+  tcpsegment **pool;
+} tcpsegpool;
 
 typedef struct tcpsespool
 {
@@ -199,15 +200,15 @@ typedef struct miruopt
 {
   pcap_t *p;
   int  loop;               // SININT/SIGTERMが発生したら0になる
-  int  alrm;               // タイマ割り込みが発生したら1になる
   int  mode;               // 動作モード。mオプションの値で決定
+  int  live;               // 1ならリアルタイム表示をする
   int  color;              // カラー表示を有効にするかどうか
   int  lktype;             // データリンク層の種別
   int  pksize;             // キャプチャサイズ
   int  promisc;            // NICをpromiscにするか
   int  rstmode;            // Rオプションの数
   int  verbose;            // vオプションの数
-  int  showdata;           //
+  int  showdata;           // Dオプションの数
   int  rsynfind;           // SYNの再送を必ず検出するフラグ
   int  stattime;           // 統計情報を表示する間隔
   int  rt_limit;           // 再送許容間隔(ms)
@@ -225,23 +226,20 @@ typedef struct miruopt
   uint32_t count_ts;       // tcpsessionオブジェクト数(未使用分も含む)
   uint32_t count_act;      // 現在の接続数
   uint32_t count_actmax;   // 瞬間最大接続数
-  uint32_t count_tp_act;   // 使用中のtcppacketオブジェクト数
+  uint32_t count_sg_act;   // 使用中のtcpsegmentオブジェクト数
   uint64_t count_total;    //
   uint64_t count_view;     //
   uint64_t count_ts_drop;  // TCPセッションの確保ができなかった数
-  uint64_t count_tp_drop;  // TCPパケットを保持できなかった数
+  uint64_t count_sg_drop;  // TCPパケットを保持できなかった数
   uint64_t count_timeout;  //
   uint64_t count_rstbreak; //
   uint64_t count_rstclose; //
   tcpsession *tsact;       //
-  tcpsespool tspool;       //
-  tcppktpool tppool;       //
+  tcpsespool tsespool;     //
+  tcpsegpool tsegpool;     //
   struct tm tm;            //
-  struct rusage  now_rs;   //
-  struct rusage  old_rs;   //
-  struct timeval now_tv;   //
-  struct timeval old_tv;   //
-  struct itimerval  itv;   //
+  struct timeval   now;    //
+  struct itimerval itv;    //
 } miruopt;
 
 extern miruopt opt;
