@@ -33,9 +33,9 @@
 #define COLOR_WHITE   7
 
 /***** MIRUO MODE *****/
-#define MIRUO_MODE_TCP_SESSION 1
-#define MIRUO_MODE_HTTP        2
-#define MIRUO_MODE_MYSQL       3
+#define MIRUO_MODE_TCP   1
+#define MIRUO_MODE_HTTP  2
+#define MIRUO_MODE_MYSQL 3
 
 /***** TCP STATUS *****/
 #define MIRUO_STATE_TCP_LISTEN     1
@@ -49,6 +49,9 @@
 #define MIRUO_STATE_TCP_CLOSED     9
 #define MIRUO_STATE_TCP_TIME_WAIT  10
 
+/*************************************
+* Header
+*************************************/
 typedef struct ethhdr{
   uint8_t  smac[6];
   uint8_t  dmac[6];
@@ -84,16 +87,16 @@ typedef struct iprawhdr
 typedef struct iphdr
 {
   l2hdr    l2;
-  uint8_t  Ver;
-  uint8_t  IHL;
-  uint8_t  TOS;
+  uint8_t  ver;
+  uint8_t  ihl;
+  uint8_t  tos;
   uint16_t len;
   uint16_t id;
   uint8_t  flags;
   uint16_t offset;
-  uint8_t  TTL;
-  uint8_t  Protocol;
-  uint16_t Checksum;
+  uint8_t  ttl;
+  uint8_t  protocol;
+  uint16_t checksum;
   struct in_addr src;
   struct in_addr dst;
   uint8_t option[40];
@@ -144,7 +147,8 @@ typedef struct tcpsegment
   uint8_t  sno;            //
   uint8_t  rno;            //
   uint8_t  st[2];          // ステータス
-  uint8_t  flags;          //
+  uint8_t  flags;          // TCPフラグ
+  uint8_t  flagment;       // IPフラグメントの状態
   uint16_t segsz;          // セグメントサイズ
   uint16_t segno;          // セグメント番号
   uint32_t seqno;          // シーケンス番号
@@ -160,6 +164,7 @@ typedef struct tcpsession
 {
   uint16_t   sid;            //
   uint8_t   view;            //
+  uint8_t  zview;            //
   uint32_t pkcnt;            // 現在保持しているパケット数
   uint32_t pkall;            // このセッションで飛び交った総パケット数
   uint32_t szall;            // このセッションで飛び交った総データサイズ(L2/L3ヘッダも含む)
@@ -199,48 +204,55 @@ typedef struct meminfo
 typedef struct miruopt
 {
   pcap_t *p;
-  int  loop;               // SININT/SIGTERMが発生したら0になる
-  int  mode;               // 動作モード。mオプションの値で決定
-  int  live;               // 1ならリアルタイム表示をする
-  int  quite;              // 疑わしきは罰しないモード
-  int  color;              // カラー表示を有効にするかどうか
-  int  lktype;             // データリンク層の種別
-  int  pksize;             // キャプチャサイズ
-  int  promisc;            // NICをpromiscにするか
-  int  rstmode;            // Rオプションの数
-  int  verbose;            // vオプションの数
-  int  showdata;           // Dオプションの数
-  int  rsynfind;           // SYNの再送を必ず検出するフラグ
-  int  stattime;           // 統計情報を表示する間隔
-  int  rt_limit;           // 再送許容間隔(ms)
-  int  ct_limit;           // これ以上時間がかかったら表示(ms)
-  int  ts_limit;           // 最大同時接続数
-  int  tp_limit;           // 保持するパケット数の最大数
-  char dev[32];            // デバイス名(eth0とかbond0とか)
-  char exp[1024];          // フィルタ文字列
-  char lkname[256];        // データリンク層の名前?
-  char lkdesc[256];        // データリンク層の説明?
-  char file[PATH_MAX];     // オフラインモードで読み込むファイル名
-  uint32_t err_l2;         //
-  uint32_t err_ip;         //
-  uint32_t err_tcp;        //
-  uint32_t count_ts;       // tcpsessionオブジェクト数(未使用分も含む)
-  uint32_t count_act;      // 現在の接続数
-  uint32_t count_actmax;   // 瞬間最大接続数
-  uint32_t count_sg_act;   // 使用中のtcpsegmentオブジェクト数
-  uint64_t count_total;    //
-  uint64_t count_view;     //
-  uint64_t count_ts_drop;  // TCPセッションの確保ができなかった数
-  uint64_t count_sg_drop;  // TCPパケットを保持できなかった数
-  uint64_t count_timeout;  //
-  uint64_t count_rstbreak; //
-  uint64_t count_rstclose; //
-  tcpsession *tsact;       //
-  tcpsespool tsespool;     //
-  tcpsegpool tsegpool;     //
-  struct tm tm;            //
-  struct timeval   now;    //
-  struct itimerval itv;    //
+  int  loop;                 // SININT/SIGTERMが発生したら0になる
+  int  mode;                 // 動作モード。mオプションの値で決定
+  int  all;                  // 1なら全セッション表示する
+  int  live;                 // 1ならリアルタイム表示する
+  int  quite;                // 疑わしきは罰しないモード
+  int  color;                // カラー表示を有効にするかどうか
+  int  lktype;               // データリンク層の種別
+  int  pksize;               // キャプチャサイズ
+  int  promisc;              // NICをpromiscにするか
+  int  rstmode;              // Rオプションの数
+  int  flagment;             // IPのフラグメントを検出するかどうか
+  int  viewdata;             // ついでに表示しとくデータの数
+  int  rsynfind;             // SYNの再送を必ず検出するフラグ
+  int  stattime;             // 統計情報を表示する間隔
+  int  rt_limit;             // 再送許容間隔(ms)
+  int  ct_limit;             // これ以上時間がかかったコネクションを表示
+  int  ns_limit;             // 次のパケットの到着がこれ以上かかったら表示
+  int  ts_limit;             // 最大同時接続数
+  int  sg_limit;             // 保持するセグメントの最大数
+  char dev[32];              // デバイス名(eth0とかbond0とか)
+  char exp[1024];            // フィルタ文字列
+  char lkname[256];          // データリンク層の名前?
+  char lkdesc[256];          // データリンク層の説明?
+  char file[PATH_MAX];       // オフラインモードで読み込むファイル名
+  uint32_t err_l2;           //
+  uint32_t err_ip;           //
+  uint32_t err_tcp;          //
+  uint32_t count_ts;         // tcpsessionオブジェクト数(未使用分も含む)
+  uint32_t count_ts_act;     // 現在の接続数
+  uint32_t count_ts_max;     // 瞬間最大接続数
+  uint64_t count_ts_error;   // 
+  uint64_t count_ts_long;    // 
+  uint64_t count_ts_total;   //
+  uint64_t count_ts_view;    //
+  uint64_t count_ts_drop;    // TCPセッションの確保ができなかった数
+  uint64_t count_ts_timeout; //
+  uint32_t count_sg_act;     // 使用中のtcpsegmentオブジェクト数
+  uint32_t count_sg_max;     // tcpsegmentオブジェクトの最大利用数
+  uint64_t count_sg_delay;   // 
+  uint64_t count_sg_drop;    // TCPパケットを保持できなかった数
+  uint64_t count_sg_retrans; // 再送回数
+  uint64_t count_rstbreak;   //
+  uint64_t count_rstclose;   //
+  tcpsession *tsact;         //
+  tcpsespool tsespool;       //
+  tcpsegpool tsegpool;       //
+  struct tm tm;              //
+  struct timeval stv;        // 開始時刻
+  struct timeval ntv;        // 現在時刻/終了時刻
 } miruopt;
 
 extern miruopt opt;
