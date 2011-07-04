@@ -20,8 +20,8 @@ void usage()
   printf("       --all                      # all session lookup\n");
   printf("       --live                     # live mode(all segment lookup)\n");
   printf("   -q, --qiute                    # \n");
-  printf("   -F, --flagment                 # ip flagment lookup\n");
-  printf("   -C, --color=NUM                # color 0=off 1=on\n");
+  printf("   -F, --flagment=[0|1]           # ip flagment lookup. default=1\n");
+  printf("   -C, --color=[0|1]              # color 0=off 1=on\n");
   printf("   -S, --syn=NUM                  # syn retransmit lookup mode.default=1. 0=ignore 1=lookup\n");
   printf("   -R, --rst=NUM                  # rst lookup mode.default=1. (see README)\n");
   printf("   -v, --view-data=NUM            # \n");
@@ -898,7 +898,7 @@ void print_tcpsession(FILE *fp, tcpsession *c)
       sprintf(ip[0], "%s:%u", inet_ntoa(c->ip[0].sin_addr), c->ip[0].sin_port);
       sprintf(ip[1], "%s:%u", inet_ntoa(c->ip[1].sin_addr), c->ip[1].sin_port);
       sprintf(st, "%s/%s", tcp_state_str(sg->st[sg->sno]), tcp_state_str(sg->st[sg->rno]));
-      fprintf(fp, "%s%04u:%04u %s %s %s%s%s %s %-23s %08X/%08X %s <%s>%s\n",
+      fprintf(fp, "%s%04u:%04u %s %s %s%s%s %s %-23s %08X/%08X %4u %s <%s>%s\n",
         cl[0], 
           c->sid, sg->segno,
           ts,
@@ -906,7 +906,9 @@ void print_tcpsession(FILE *fp, tcpsession *c)
           allow[sg->sno], tcp_flag_str(sg->flags), allow[sg->sno],  
           ip[1],
           st,
-          sg->seqno, sg->ackno,
+          sg->seqno, 
+          sg->ackno,
+          sg->segsz,
           fs,
           tcp_opt_str(sg->opt, sg->optsize), 
         cl[1]);
@@ -1027,16 +1029,17 @@ tcpsession *miruo_tcpsession_destroy(tcpsession *c, int view, char *msg, char *r
 
 void miruo_tcpsession_timeout()
 {
-  tcpsegment *p;
-  tcpsession *t;
+  tcpsession *c;
+  tcpsegment *s;
 
-  t = opt.tsact;
-  if(t == NULL){
+  c = opt.tsact;
+  if(c == NULL){
     return;
   }
-  while(t){
-    if((opt.ntv.tv_sec - t->segment.ts.tv_sec) > 30){
-      switch(t->st[0]){
+  while(c){
+    s = c->last ? c->last : &(c->segment);
+    if((opt.ntv.tv_sec - s->ts.tv_sec) > 30){
+      switch(c->st[0]){
         case MIRUO_STATE_TCP_SYN_SENT:
         case MIRUO_STATE_TCP_SYN_RECV:
         case MIRUO_STATE_TCP_FIN_WAIT1:
@@ -1044,10 +1047,10 @@ void miruo_tcpsession_timeout()
         case MIRUO_STATE_TCP_CLOSE_WAIT:
         case MIRUO_STATE_TCP_LAST_ACK:
           opt.count_ts_timeout++;
-          t = miruo_tcpsession_destroy(t, 1, "destroy session", "time out");
+          c = miruo_tcpsession_destroy(c, 1, "destroy session", "time out");
           continue;
       }
-      switch(t->st[1]){
+      switch(c->st[1]){
         case MIRUO_STATE_TCP_SYN_SENT:
         case MIRUO_STATE_TCP_SYN_RECV:
         case MIRUO_STATE_TCP_FIN_WAIT1:
@@ -1055,14 +1058,14 @@ void miruo_tcpsession_timeout()
         case MIRUO_STATE_TCP_CLOSE_WAIT:
         case MIRUO_STATE_TCP_LAST_ACK:
           opt.count_ts_timeout++;
-          t = miruo_tcpsession_destroy(t, 1, "destroy session", "time out");
+          c = miruo_tcpsession_destroy(c, 1, "destroy session", "time out");
           continue;
       }
     }
-    p = t->segment.next;
+    s = c->segment.next;
     /*
-    while(p){
-      if(p->view){
+    while(s){
+      if(s->view){
         // 再送時間の最長を暫定的に30秒として、それ以前に受け取ったパケットを破棄
         // そのため30秒以内の再送は検出できるがそれ以上かかった場合は検知できない
         // 30秒でも十分に大きすぎる気がするのでRTOをどうにか計算したほうがいいかな
@@ -1071,7 +1074,7 @@ void miruo_tcpsession_timeout()
       }
     }
     */
-    t = t->next;
+    c = c->next;
   }
 }
 
@@ -1532,6 +1535,7 @@ int miruo_init()
   opt.quite    = 0;
   opt.promisc  = 1;
   opt.viewdata = 0;
+  opt.flagment = 1;
   opt.rsynfind = 1;
   opt.rstmode  = 1;
   opt.stattime = 0;
@@ -1553,7 +1557,7 @@ struct option *get_optlist()
       "all",             0, NULL, 500,
       "live",            0, NULL, 501,
       "quite",           0, NULL, 'q',
-      "flagment",        0, NULL, 'F',
+      "flagment",        1, NULL, 'F',
       "color",           1, NULL, 'C',
       "syn",             1, NULL, 'S',
       "rst",             1, NULL, 'R',
@@ -1581,7 +1585,7 @@ void miruo_setopt(int argc, char *argv[])
   F[MIRUO_MODE_TCP]   = "tcp";
   F[MIRUO_MODE_HTTP]  =  NULL;
   F[MIRUO_MODE_MYSQL] =  NULL;
-  while((r = getopt_long(argc, argv, "hVqAFC:S:R:v:a:T:t:r:m:s:f:i:", get_optlist(), NULL)) != -1){
+  while((r = getopt_long(argc, argv, "hVqAF:C:S:R:v:a:T:t:r:m:s:f:i:", get_optlist(), NULL)) != -1){
     switch(r){
       case 500:
         opt.all = 1;
@@ -1600,7 +1604,7 @@ void miruo_setopt(int argc, char *argv[])
         opt.quite++;
         break;
       case 'F':
-        opt.flagment++;
+        opt.flagment = atoi(optarg);
         break;
       case 'R':
         opt.rstmode = atoi(optarg);
