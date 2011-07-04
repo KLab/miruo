@@ -6,41 +6,52 @@
 /**************************************************************************/
 
 【はじめに】
-  miruoはlibpcapを利用したパケットキャプチャ型のセッション解析ツールです。  
-  tcpdumpと似てますが、以下の点で違いがあります。
+  miruoはlibpcapを利用した、パケットキャプチャ型のTCPセッション解析ツールで、
+  以下のような特徴があります。
 
-  - セッション毎にまとめて表示
-  - パケットが再送されたセッションを検出
-  - RSTで中断されたセッションを検出
+  - 高速で軽量に動作します
+  - TCPセッション毎にまとめてパケットを表示できます
+  - 
+  - パケットが再送されたセッションのみを抽出できます
+  - RSTで中断されたセッションを検出できます
+  - tcpdumpの-wで保存されたファイルを解析できます
 
+  ネットワーク上の問題を調査したい場合、tcpdumpでパケットデータを採取して、
+　wiresharkやtcptraceなどで解析する事が多いと思います。これらのツールは大変
+　便利で優れていると思いますが、tcpdumpのログは比較的サイズが大きくなりやす
+　いため、それを解析するマシンもメモリを大量に必要とします。
+
+
+  
 
 【使い方】
-  usage: miruo -m mode [option] [expression]
-
-  mode
-   tcp          # tcp session check
-   http         # http request monitor(not yet)
-   mysql        # mysql query  monitor(not yet)
-
+usage: miruo [option] [expression]
   option
-   -h           # help
-   -V           # version
-   -v           # verbose
-   -vv          # more verbose
-   -vvv         # most verbose
-   -C0          # color off
-   -C1          # color on
-   -R           # find RST break(tcp only)
-   -RR          # find RST close(tcp only)
-   -Stime       # status view
-   -r file      # read file(for tcpdump -w)
-   -i interface # 
+   -h, --help                     # help
+   -V, --version                  # version
+       --all                      # all session lookup
+       --live                     # live mode(all segment lookup)
+   -q, --qiute                    # 
+   -F, --flagment=[0|1]           # ip flagment lookup. default=1
+   -C, --color=[0|1]              # color 0=off 1=on
+   -S, --syn=[0|1]                # syn retransmit lookup mode.default=1. 0=ignore 1=lookup
+   -R, --rst=[0|1|2]              # rst lookup mode.default=1. (see README)
+   -v, --view-data=NUM            # 
+   -L, --limit-session=NUM        # active session limit. Default 1024
+   -l, --limit-segment=NUM        # active segment limit. Default 65536
+   -T, --connection-time=time[ms] # Threshold of connection time for lookup. Default 0ms(off)
+   -t, --long-delay-time=time[ms] # Threshold of long delay time for lookup. Default 0ms(off)
+   -r, --retransmit-time=time[ms] # Threshold of retransmit time for lookup. Default 1000ms
+   -s, --stat=interval[sec]       # statistics view interval. Default 0sec(off)
+   -f, --file=file                # read file(for tcpdump -w)
+   -i, --interface=dev            # eth0,bond0,any...
 
   expression: see man tcpdump
 
   ex)
-    miruo -m tcp host 192.168.0.100 and port 80
-    miruo -m tcp src host 192.168.0.1
+   # miruo -i eth0 -s 10 2>statistics.log
+   # miruo -i eth0 host 192.168.0.100 and port 80
+   # miruo -i eth0 -T5000 src host 192.168.0.1
 
 【オプションの詳細】
   -v   すべてのセッションを表示します。

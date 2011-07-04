@@ -1,13 +1,13 @@
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
+#define _GNU_SOURCE
 #include<stdio.h>
 #include<unistd.h>
 #include<stdlib.h>
 #include<stdint.h>
 #include<string.h>
 #include<limits.h>
-#include<math.h>
 #include<getopt.h>
 #include<signal.h>
 #include<errno.h>
@@ -243,7 +243,7 @@ typedef struct miruopt
   uint32_t count_sg_act;     // 使用中のtcpsegmentオブジェクト数
   uint32_t count_sg_max;     // tcpsegmentオブジェクトの最大利用数
   uint64_t count_sg_delay;   // 
-  uint64_t count_sg_drop;    // TCPパケットを保持できなかった数
+  uint64_t count_sg_drop;    // TCPセグメントを保持できなかった数
   uint64_t count_sg_retrans; // 再送回数
   uint64_t count_rstbreak;   //
   uint64_t count_rstclose;   //

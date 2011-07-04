@@ -22,11 +22,11 @@ void usage()
   printf("   -q, --qiute                    # \n");
   printf("   -F, --flagment=[0|1]           # ip flagment lookup. default=1\n");
   printf("   -C, --color=[0|1]              # color 0=off 1=on\n");
-  printf("   -S, --syn=NUM                  # syn retransmit lookup mode.default=1. 0=ignore 1=lookup\n");
-  printf("   -R, --rst=NUM                  # rst lookup mode.default=1. (see README)\n");
+  printf("   -S, --syn=[0|1]                # syn retransmit lookup mode.default=1. 0=ignore 1=lookup\n");
+  printf("   -R, --rst=[0|1|2]              # rst lookup mode.default=1. (see README)\n");
   printf("   -v, --view-data=NUM            # \n");
-  printf("   -L, --limit-session=NUM        # active session limit(Default 1024)\n");
-  printf("   -l, --limit-segment=NUM        # active segment limit(Default 65536)\n");
+  printf("   -L, --limit-session=NUM        # active session limit. Default 1024\n");
+  printf("   -l, --limit-segment=NUM        # active segment limit. Default 65536\n");
   printf("   -T, --connection-time=time[ms] # Threshold of connection time for lookup. Default 0ms(off)\n");
   printf("   -t, --long-delay-time=time[ms] # Threshold of long delay time for lookup. Default 0ms(off)\n");
   printf("   -r, --retransmit-time=time[ms] # Threshold of retransmit time for lookup. Default 1000ms\n");
@@ -537,7 +537,8 @@ tcpsession *get_active_tcpsession(tcpsession *session)
 *************************************************/
 tcpsegment *malloc_tcpsegment_pool()
 {
-  if(opt.count_sg_act >= opt.sg_limit){
+  if(opt.sg_limit && (opt.count_sg_act >= opt.sg_limit)){
+    opt.count_sg_drop++;
     return(NULL);
   }
   return(malloc(sizeof(tcpsegment)));
@@ -618,6 +619,9 @@ tcpsegment *add_tcpsegment(tcpsession *c, tcpsegment *t)
     return;
   }
   t = malloc_tcpsegment(t);
+  if(t == NULL){
+    return(NULL);
+  }
   p = (c->last) ? c->last : &(c->segment);
   c->pkcnt++;
   c->pkall++;
@@ -769,7 +773,7 @@ tcpsession *add_tcpsession(tcpsession *c)
     return(NULL);
   }
 
-  if(opt.count_ts_act >= opt.ts_limit){
+  if(opt.ts_limit && (opt.count_ts_act >= opt.ts_limit)){
     opt.count_ts_drop++;
     return(NULL);
   }
@@ -1038,6 +1042,8 @@ void miruo_tcpsession_timeout()
   }
   while(c){
     s = c->last ? c->last : &(c->segment);
+    if((opt.ntv.tv_sec - s->ts.tv_sec) > 900){
+    }
     if((opt.ntv.tv_sec - s->ts.tv_sec) > 30){
       switch(c->st[0]){
         case MIRUO_STATE_TCP_SYN_SENT:
@@ -1063,17 +1069,17 @@ void miruo_tcpsession_timeout()
       }
     }
     s = c->segment.next;
-    /*
     while(s){
       if(s->view){
-        // 再送時間の最長を暫定的に30秒として、それ以前に受け取ったパケットを破棄
-        // そのため30秒以内の再送は検出できるがそれ以上かかった場合は検知できない
-        // 30秒でも十分に大きすぎる気がするのでRTOをどうにか計算したほうがいいかな
-        if((opt.ntv.tv_sec - p->ts.tv_sec) > 30){
+        // 再送時間の最長を暫定的に30秒として、それ以前に受け取ったセグメントを破棄する。
+        // この処理の目的は、メモリを節約することと、セッション開放時の処理を軽減させること。
+        // 大量のセグメントを保持し続けてもいいことないので仕方なく・・・
+        // そのため30秒以内の再送は検出できるがそれ以上かかった場合は検知できなくなる。
+        // まあ、30秒でも十分に大きすぎる気がするのでRTOをざっくり計算したほうがいいのかな。
+        if((opt.ntv.tv_sec - s->ts.tv_sec) > 30){
         }
       }
     }
-    */
     c = c->next;
   }
 }
@@ -1585,7 +1591,7 @@ void miruo_setopt(int argc, char *argv[])
   F[MIRUO_MODE_TCP]   = "tcp";
   F[MIRUO_MODE_HTTP]  =  NULL;
   F[MIRUO_MODE_MYSQL] =  NULL;
-  while((r = getopt_long(argc, argv, "hVqAF:C:S:R:v:a:T:t:r:m:s:f:i:", get_optlist(), NULL)) != -1){
+  while((r = getopt_long_only(argc, argv, "hVqAF:C:S:R:v:L:l:T:t:r:m:s:f:i:", get_optlist(), NULL)) != -1){
     switch(r){
       case 500:
         opt.all = 1;
@@ -1604,7 +1610,7 @@ void miruo_setopt(int argc, char *argv[])
         opt.quite++;
         break;
       case 'F':
-        opt.flagment = atoi(optarg);
+        printf("f=%d\n", opt.flagment);
         break;
       case 'R':
         opt.rstmode = atoi(optarg);
@@ -1618,10 +1624,11 @@ void miruo_setopt(int argc, char *argv[])
       case 'C':
         opt.color = atoi(optarg);
         break;
-      case 'a':
-        if(atoi(optarg) > 0){
-          opt.ts_limit = atoi(optarg);
-        }
+      case 'L':
+        opt.ts_limit = atoi(optarg);
+        break;
+      case 'l':
+        opt.sg_limit = atoi(optarg);
         break;
       case 'T':
         opt.ct_limit = atoi(optarg);
