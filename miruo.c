@@ -253,6 +253,9 @@ char *tcp_opt_str(uint8_t *opt, uint8_t optsize)
 uint64_t get_keika_time(struct timeval *stv, struct timeval *etv)
 {
   struct timeval tv;
+  if(timercmp(etv, stv, <)){
+    return(0);
+  }
   timersub(etv, stv, &tv);
   return(tv.tv_sec * 1000000 + tv.tv_usec);
 }
@@ -270,7 +273,7 @@ uint32_t tcp_connection_time(tcpsession *c)
   return(t);
 }
 
-tcpsegment *tcp_retransmit(tcpsession *c, tcpsegment *t)
+tcpsegment *tcp_retransmit_segment(tcpsession *c, tcpsegment *t)
 {
   tcpsegment *p;
   if(c == NULL){
@@ -462,7 +465,6 @@ uint8_t *read_header_ip(iphdr *h, uint8_t *p, uint32_t *l)
   p  += sizeof(iphdraw);
   *l -= sizeof(iphdraw);
   if(optlen = h->ihl - sizeof(iphdraw)){
-    fprintf(stderr, "%s: len=%d IHL=%d, size=%d\n", __func__, optlen, h->ihl, sizeof(iphdraw));
     if(*l < optlen){
       return(NULL);
     }
@@ -633,14 +635,18 @@ tcpsegment *add_tcpsegment(tcpsession *c, tcpsegment *t)
   t->st[0] = c->st[t->sno];
   t->st[1] = c->st[t->rno];
 
-  if(opt.flagment && (t->flagment & 1)){ 
+  if(opt.flagment && (t->flagment & 1)){
+    c->view  = 1;
+    t->view  = 0;
     t->color = COLOR_RED;
+    opt.count_ip_flagment++;
   }
-  if((opt.ns_limit > 0) && (get_keika_time(&(p->ts), &(t->ts)) / 1000 > opt.ns_limit)){
+  if((opt.st_limit > 0) && ((get_keika_time(&(p->ts), &(t->ts)) / 1000) > opt.st_limit)){
     c->view  = 1;
     p->view  = 0;
     t->view  = 0;
     t->color = COLOR_RED;
+    opt.count_sg_delay++;
   }
   if(opt.live == 1){
     t->view = 0;
@@ -965,6 +971,11 @@ void miruo_tcpsession_statistics(int view)
   fprintf(stderr, " - Timeout        : %llu\n", opt.count_ts_timeout);
   fprintf(stderr, " - Error          : %llu\n", opt.count_ts_error);
   fprintf(stderr, " - RST            : %llu\n", opt.count_rstbreak + opt.count_rstclose);
+  fprintf(stderr, " - flagment       : %llu\n", opt.count_ip_flagment);
+  fprintf(stderr, "------------------------------\n");
+  fprintf(stderr, "connection-time   : %d [ms]\n", opt.ct_limit);
+  fprintf(stderr, "long-delay-time   : %d [ms]\n", opt.st_limit);
+  fprintf(stderr, "retransmit-time   : %d [ms]\n", opt.rt_limit);
   fprintf(stderr, "------------------------------\n");
   fprintf(stderr, "ActiveSession     : %u\n",   opt.count_ts_act);
   fprintf(stderr, "ActiveSessionMax  : %u\n",   opt.count_ts_max);
@@ -1086,14 +1097,14 @@ void miruo_tcpsession_timeout()
   }
 }
 
-tcpsegment *tcp_retransmit_process(tcpsession *c, tcpsegment *t)
+int tcp_retransmit(tcpsession *c, tcpsegment *t)
 {
   tcpsegment *p;
-  if(p = tcp_retransmit(c, t)){
+  if(p = tcp_retransmit_segment(c, t)){
     // p = 再送元のセグメント
     // t = 再送したセグメント
     if(is_tcp_retransmit_ignore(p, t)){
-      return(NULL);
+      return(1);
     }
     c->view = 1;
     if((p->optsize != t->optsize) || (memcmp(p->opt, t->opt, p->optsize) != 0)){
@@ -1114,7 +1125,7 @@ tcpsegment *tcp_retransmit_process(tcpsession *c, tcpsegment *t)
       }
     }
   }
-  return(add_tcpsegment(c, t));
+  return(0);
 }
 
 tcpsession *miruo_tcpsession_connect(tcpsession *c, tcpsession *s, int *connect)
@@ -1450,7 +1461,10 @@ void miruo_tcpsession(u_char *u, const struct pcap_pkthdr *ph, const u_char *p)
   c = get_active_tcpsession(&ts);
   c = miruo_tcpsession_connect(c, &ts, &connect);
   if(connect == 0){
-    s = tcp_retransmit_process(c, &(ts.segment));
+    if(tcp_retransmit(c, &(ts.segment))){
+      return;
+    }
+    s = add_tcpsegment(c, &(ts.segment));
     if(miruo_tcpsession_setstatus(c, s) == -1){
       return;
     }
@@ -1549,7 +1563,7 @@ int miruo_init()
   opt.stattime = 0;
   opt.pksize   = 96;
   opt.ct_limit = 0;
-  opt.ns_limit = 0;
+  opt.st_limit = 0;
   opt.rt_limit = 1000;
   opt.ts_limit = 1024;
   opt.sg_limit = 65536;
@@ -1590,9 +1604,9 @@ void miruo_setopt(int argc, char *argv[])
   int   r;
   char *F[8];
   memset(F, 0, sizeof(F));
-  F[MIRUO_MODE_TCP]   = "tcp";
-  F[MIRUO_MODE_HTTP]  =  NULL;
-  F[MIRUO_MODE_MYSQL] =  NULL;
+  F[MIRUO_MODE_TCP]   = NULL;
+  F[MIRUO_MODE_HTTP]  = NULL;
+  F[MIRUO_MODE_MYSQL] = NULL;
   while((r = getopt_long_only(argc, argv, "hVqAF:C:S:R:v:L:l:T:t:r:m:s:f:i:", get_optlist(), NULL)) != -1){
     switch(r){
       case 500:
@@ -1636,7 +1650,7 @@ void miruo_setopt(int argc, char *argv[])
         opt.ct_limit = atoi(optarg);
         break;
       case 't':
-        opt.ns_limit = atoi(optarg);
+        opt.st_limit = atoi(optarg);
         break;
       case 'r':
         opt.rt_limit = atoi(optarg);
