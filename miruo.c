@@ -19,17 +19,17 @@ void usage()
   printf("   -V, --version                  # version\n");
   printf("   -i, --interface=dev            # eth0,bond0,any...\n");
   printf("   -v, --view-data=NUM            # \n");
-  printf("   -T, --connection-time=time[ms] # Threshold of connection time for lookup. Default 0ms(off)\n");
-  printf("   -t, --long-delay-time=time[ms] # Threshold of long delay time for lookup. Default 0ms(off)\n");
-  printf("   -r, --retransmit-time=time[ms] # Threshold of retransmit time for lookup. Default 1000ms\n");
+  printf("   -T, --long-connect=time[ms]    # Threshold of connection time for lookup. Default 0ms(off)\n");
+  printf("   -t, --long-delay=time[ms]      # Threshold of long delay time for lookup. Default 0ms(off)\n");
+  printf("   -r, --retransmit=time[ms]      # Threshold of retransmit time for lookup. Default 1000ms\n");
   printf("   -s, --stat=interval[sec]       # statistics view interval. Default 0sec(off)\n");
   printf("   -f, --file=file                # read file(for tcpdump -w)\n");
   printf("   -S, --syn=[0|1]                # syn retransmit lookup mode.default=1. 0=ignore 1=lookup\n");
   printf("   -R, --rst=[0|1|2]              # rst lookup mode.default=1. (see README)\n");
   printf("   -F, --flagment=[0|1]           # ip flagment lookup. default=1\n");
   printf("   -C, --color=[0|1]              # color 0=off 1=on\n");
-  printf("   -L, --limit-session=NUM        # active session limit. Default 1024\n");
-  printf("   -l, --limit-segment=NUM        # active segment limit. Default 65536\n");
+  printf("   -L, --session-limit=NUM        # active session limit. Default 1024\n");
+  printf("   -l, --segment-limit=NUM        # active segment limit. Default 65536\n");
   printf("   -q, --qiute                    # \n");
   printf("       --all                      # all session lookup\n");
   printf("       --live                     # live mode(all segment lookup)\n");
@@ -951,10 +951,12 @@ void miruo_tcpsession_statistics(int view)
   }
   viewtime.tv_sec  = opt.ntv.tv_sec;
   viewtime.tv_usec = opt.ntv.tv_usec;
-  //if(opt.tsact){
-  //  fprintf(stderr, "===== ACTIVE SESSIONLIST =====\n");
-  //  print_acttcpsession(stderr);
-  //}
+  /*
+  if(opt.tsact){
+    fprintf(stderr, "===== ACTIVE SESSIONLIST =====\n");
+    print_acttcpsession(stderr);
+  }
+  */
   memset(&ps, 0, sizeof(ps));
   pcap_stats(opt.p, &ps);
   cpu = get_cpu_utilization();
@@ -964,18 +966,18 @@ void miruo_tcpsession_statistics(int view)
   fprintf(stderr, "===== Session Statistics =====\n");
   fprintf(stderr, "Captcha Time      : %s\n",   tstr);
   fprintf(stderr, "Total Sessions    : %llu\n", opt.count_ts_total);
-  fprintf(stderr, " - Lookup         : %llu\n", opt.count_ts_view);
-  fprintf(stderr, " - Long           : %llu\n", opt.count_ts_long);
-  fprintf(stderr, " - Delay          : %llu\n", opt.count_sg_delay);
-  fprintf(stderr, " - Retransmit     : %llu\n", opt.count_sg_retrans);
-  fprintf(stderr, " - Timeout        : %llu\n", opt.count_ts_timeout);
-  fprintf(stderr, " - Error          : %llu\n", opt.count_ts_error);
-  fprintf(stderr, " - RST            : %llu\n", opt.count_rstbreak + opt.count_rstclose);
-  fprintf(stderr, " - flagment       : %llu\n", opt.count_ip_flagment);
+  fprintf(stderr, "  Lookup          : %llu\n", opt.count_ts_view);
+  fprintf(stderr, "   - LongConnect  : %llu\n", opt.count_ts_long);
+  fprintf(stderr, "   - LongDelay    : %llu\n", opt.count_sg_delay);
+  fprintf(stderr, "   - Retransmit   : %llu\n", opt.count_sg_retrans);
+  fprintf(stderr, "   - Timeout      : %llu\n", opt.count_ts_timeout);
+  fprintf(stderr, "   - Error        : %llu\n", opt.count_ts_error);
+  fprintf(stderr, "   - RST          : %llu\n", opt.count_rstbreak + opt.count_rstclose);
+  fprintf(stderr, "   - flagment     : %llu\n", opt.count_ip_flagment);
   fprintf(stderr, "------------------------------\n");
-  fprintf(stderr, "connection-time   : %d [ms]\n", opt.ct_limit);
-  fprintf(stderr, "long-delay-time   : %d [ms]\n", opt.st_limit);
-  fprintf(stderr, "retransmit-time   : %d [ms]\n", opt.rt_limit);
+  fprintf(stderr, "long connect time : %d [ms]\n", opt.ct_limit);
+  fprintf(stderr, "long delay   time : %d [ms]\n", opt.st_limit);
+  fprintf(stderr, "retransmit   time : %d [ms]\n", opt.rt_limit);
   fprintf(stderr, "------------------------------\n");
   fprintf(stderr, "ActiveSession     : %u\n",   opt.count_ts_act);
   fprintf(stderr, "ActiveSessionMax  : %u\n",   opt.count_ts_max);
@@ -1586,9 +1588,9 @@ struct option *get_optlist()
       "view-data",       1, NULL, 'v',
       "limit-session",   1, NULL, 'L',
       "limit-segment",   1, NULL, 'l',
-      "connection-time", 1, NULL, 'T',
-      "long-delay-time", 1, NULL, 't',
-      "retransmit-time", 1, NULL, 'r',
+      "long-connect",    1, NULL, 'T',
+      "long-delay",      1, NULL, 't',
+      "retransmit",      1, NULL, 'r',
       "mode",            1, NULL, 'm',
       "stat-interval",   1, NULL, 's',
       "file",            1, NULL, 'f',

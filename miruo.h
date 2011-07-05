@@ -102,15 +102,6 @@ typedef struct iphdr
   uint8_t option[40];
 } iphdr;
 
-typedef struct ipstok
-{
-  iphdr          head;
-  uint8_t data[65536];
-  struct ipstok *prev;
-  struct ipstok *next;
-  struct timeval time;
-} ipstok;
-
 typedef struct tcprawhdr
 {
   uint16_t sport;
@@ -142,8 +133,8 @@ typedef struct tcphdr
 
 typedef struct tcpsegment
 {
-  uint8_t  color;          //
-  uint8_t  view;           //
+  uint8_t  color;          // 表示色
+  uint8_t  view;           // 表示済なら1になる
   uint8_t  sno;            //
   uint8_t  rno;            //
   uint8_t  st[2];          // ステータス
@@ -155,16 +146,16 @@ typedef struct tcpsegment
   uint32_t ackno;          // 応答番号
   uint8_t  optsize;        // TCPオプションのサイズ
   uint8_t  opt[40];        // TCPヘッダからコピーしたオプションデータ
-  struct timeval ts;       //
-  struct tcpsegment *prev; //
-  struct tcpsegment *next; //
+  struct timeval ts;       // パケットをキャプチャした時間
+  struct tcpsegment *prev; // 前のセグメント
+  struct tcpsegment *next; // 次のセグメント
 } tcpsegment;
 
 typedef struct tcpsession
 {
-  uint16_t   sid;            //
-  uint8_t   view;            //
-  uint8_t  zview;            //
+  uint16_t   sid;            // セッションID
+  uint8_t   view;            // セッションを表示する必要があるなら1になる
+  uint8_t  zview;            // 
   uint32_t pkcnt;            // 現在保持しているパケット数
   uint32_t pkall;            // このセッションで飛び交った総パケット数
   uint32_t szall;            // このセッションで飛び交った総データサイズ(L2/L3ヘッダも含む)
@@ -203,7 +194,7 @@ typedef struct meminfo
 
 typedef struct miruopt
 {
-  pcap_t *p;
+  pcap_t *p;                  //
   int  loop;                  // SININT/SIGTERMが発生したら0になる
   int  mode;                  // 動作モード。mオプションの値で決定
   int  all;                   // 1なら全セッション表示する
@@ -251,9 +242,8 @@ typedef struct miruopt
   tcpsession *tsact;          //
   tcpsespool tsespool;        //
   tcpsegpool tsegpool;        //
-  struct tm tm;               //
   struct timeval stv;         // 開始時刻
-  struct timeval ntv;         // 現在時刻/終了時刻
+  struct timeval ntv;         // 現在時刻
 } miruopt;
 
 extern miruopt opt;
