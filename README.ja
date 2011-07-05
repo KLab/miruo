@@ -1,70 +1,61 @@
 /**************************************************************************/
 /*                                                                        */
-/* miruo README                                                           */
+/* miruo README.ja                                                        */
 /*                                                                        */
 /*                                           Copyright (C) 2011 KLab Inc. */
 /**************************************************************************/
 
 【はじめに】
-  miruoはlibpcapを利用した、パケットキャプチャ型のTCPセッション解析ツールで、
+  miruoはパケットキャプチャ型のTCPセッション解析ツールです。
   以下のような特徴があります。
 
-  - 高速で軽量に動作します
   - TCPセッション毎にまとめてパケットを表示できます
-  - 
-  - パケットが再送されたセッションのみを抽出できます
+  - パケットが再送されたセッションを抽出できます
+  - ある程度時間がかかったセッションを抽出できます
   - RSTで中断されたセッションを検出できます
-  - tcpdumpの-wで保存されたファイルを解析できます
-
-  ネットワーク上の問題を調査したい場合、tcpdumpでパケットデータを採取して、
-　wiresharkやtcptraceなどで解析する事が多いと思います。これらのツールは大変
-　便利で優れていると思いますが、tcpdumpのログは比較的サイズが大きくなりやす
-　いため、それを解析するマシンもメモリを大量に必要とします。
+  - tcpdumpの-wで保存されたファイルを利用できます
+  - 高速で軽量に動作します
 
 
-  
+【インストール方法】
+  $ tar zxvf miruo-x.y.z.tar.gz
+  $ cd miruo-x.y.z
+  $ ./configure
+  $ make
+  $ sudo make install
 
 【使い方】
 usage: miruo [option] [expression]
   option
    -h, --help                     # help
    -V, --version                  # version
-       --all                      # all session lookup
-       --live                     # live mode(all segment lookup)
-   -q, --qiute                    # 
-   -F, --flagment=[0|1]           # ip flagment lookup. default=1
-   -C, --color=[0|1]              # color 0=off 1=on
-   -S, --syn=[0|1]                # syn retransmit lookup mode.default=1. 0=ignore 1=lookup
-   -R, --rst=[0|1|2]              # rst lookup mode.default=1. (see README)
+   -i, --interface=dev            # eth0,bond0,any...
    -v, --view-data=NUM            # 
-   -L, --limit-session=NUM        # active session limit. Default 1024
-   -l, --limit-segment=NUM        # active segment limit. Default 65536
    -T, --connection-time=time[ms] # Threshold of connection time for lookup. Default 0ms(off)
    -t, --long-delay-time=time[ms] # Threshold of long delay time for lookup. Default 0ms(off)
    -r, --retransmit-time=time[ms] # Threshold of retransmit time for lookup. Default 1000ms
    -s, --stat=interval[sec]       # statistics view interval. Default 0sec(off)
    -f, --file=file                # read file(for tcpdump -w)
-   -i, --interface=dev            # eth0,bond0,any...
+   -S, --syn=[0|1]                # syn retransmit lookup mode.default=1. 0=ignore 1=lookup
+   -R, --rst=[0|1|2]              # rst lookup mode.default=1. (see README)
+   -F, --flagment=[0|1]           # ip flagment lookup. default=1
+   -C, --color=[0|1]              # color 0=off 1=on
+   -L, --limit-session=NUM        # active session limit. Default 1024
+   -l, --limit-segment=NUM        # active segment limit. Default 65536
+   -q, --qiute                    # 
+       --all                      # all session lookup
+       --live                     # live mode(all segment lookup)
 
-  expression: see man tcpdump
-
-  ex)
-   # miruo -i eth0 -s 10 2>statistics.log
-   # miruo -i eth0 host 192.168.0.100 and port 80
-   # miruo -i eth0 -T5000 src host 192.168.0.1
 
 【オプションの詳細】
-  -v   すべてのセッションを表示します。
-       表示するのは接続と切断に関する情報のみです。
 
-  -vv  すべてのセッションの全パケットを表示します。
-       表示はセッションごとにまとめられず、リアル
-       タイムに表示されます。
+[expression]
+TCPダンプと同じ書式でフィルタを指定できます。
+ただし、"tcp[13] & 2 != 0" などのような、TCPの一部のパケットのみを抽出するルール
+を書いてしまうと、セッションを追跡できなくなりますので、ホスト名の指定やポート番
+号の指定などに利用してください。フィルタの書式についてはtcpdumpのmanを参照してく
+ださい。
 
-  -R   RSTフラグによって途中で切断されたセッション
-       を表示します。FIN_WAITステート
-
-  -RR  
 
 
 
