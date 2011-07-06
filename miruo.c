@@ -860,14 +860,26 @@ void print_tcpsession(FILE *fp, tcpsession *c)
     uint32_t ct = tcp_connection_time(c);
     sprintf(ip[0], "%s:%u", inet_ntoa(c->ip[0].sin_addr), c->ip[0].sin_port);
     sprintf(ip[1], "%s:%u", inet_ntoa(c->ip[1].sin_addr), c->ip[1].sin_port);
-    fprintf(fp, "%s%04u %13u.%03u |%21s == %-21s| Total %u segments, %u bytes%s\n",
-      cl[0],
-        c->sid, 
-        ct / 1000,
-        ct % 1000,
-        ip[0], ip[1], 
-        c->pkall, c->szall, 
-      cl[1]);
+    if(opt.quite){
+      fprintf(fp, "%s%8u.%03u|%21s == %-21s|%useg(%u)%s\n",
+        cl[0],
+          ct / 1000,
+          ct % 1000,
+          ip[0],
+          ip[1], 
+          c->pkall,
+          c->szall, 
+        cl[1]);
+    }else{
+      fprintf(fp, "%s%04u %13u.%03u |%21s == %-21s| Total %u segments, %u bytes%s\n",
+        cl[0],
+          c->sid, 
+          ct / 1000,
+          ct % 1000,
+          ip[0], ip[1], 
+          c->pkall, c->szall, 
+        cl[1]);
+    }
   }
   for(sg=&(c->segment);sg;sg=sg->next){
     if(sg->view){
@@ -889,20 +901,35 @@ void print_tcpsession(FILE *fp, tcpsession *c)
       }
     }
     if(opt.live == 0){
-      fprintf(fp, "%s%04u:%04u %s |%18s %s%s%s %-18s| %08X/%08X %4u %s <%s>%s\n",
-        cl[0], 
-          c->sid, sg->segno,
-          ts, 
-          tcp_state_str(sg->st[sg->sno]),
-          allow[sg->sno], tcp_flag_str(sg->flags), allow[sg->sno],  
-          tcp_state_str(sg->st[sg->rno]),
-          sg->seqno, sg->ackno,
-          sg->segsz,
-          fs,
-          tcp_opt_str(sg->opt, sg->optsize), 
-        cl[1]);
-      if(sg->next && sg->next->view){
-        fprintf(fp, "%04u:**** %12s |%46s|\n", c->sid, "", "");
+      if(opt.quite){
+        fprintf(fp, "%s%s|%18s %s%s%s %-18s|%08X/%08X%s\n",
+          cl[0], 
+            ts, 
+            tcp_state_str(sg->st[sg->sno]),
+            allow[sg->sno], tcp_flag_str(sg->flags), allow[sg->sno],  
+            tcp_state_str(sg->st[sg->rno]),
+            sg->seqno, 
+            sg->ackno,
+          cl[1]);
+        if(sg->next && sg->next->view){
+          fprintf(fp, "%12s|%46s|\n", "", "");
+        }
+      }else{
+        fprintf(fp, "%s%04u:%04u %s |%18s %s%s%s %-18s| %08X/%08X %4u %s <%s>%s\n",
+          cl[0], 
+            c->sid, sg->segno,
+            ts, 
+            tcp_state_str(sg->st[sg->sno]),
+            allow[sg->sno], tcp_flag_str(sg->flags), allow[sg->sno],  
+            tcp_state_str(sg->st[sg->rno]),
+            sg->seqno, sg->ackno,
+            sg->segsz,
+            fs,
+            tcp_opt_str(sg->opt, sg->optsize), 
+          cl[1]);
+        if(sg->next && sg->next->view){
+          fprintf(fp, "%04u:**** %12s |%46s|\n", c->sid, "", "");
+        }
       }
     }else{
       sprintf(ip[0], "%s:%u", inet_ntoa(c->ip[0].sin_addr), c->ip[0].sin_port);
@@ -940,13 +967,10 @@ void miruo_tcpsession_statistics(int view)
     if(opt.stattime == 0){
       return;
     }
-    if(viewtime.tv_sec == 0){
-      viewtime.tv_sec  = opt.ntv.tv_sec;
-      viewtime.tv_usec = opt.ntv.tv_usec;
-      return; 
-    }
-    if(get_keika_time(&viewtime, &(opt.ntv)) / 1000000 < opt.stattime){
-      return;
+    if(viewtime.tv_sec){
+      if(get_keika_time(&viewtime, &(opt.ntv)) / 1000000 < opt.stattime){
+        return;
+      }
     }
   }
   viewtime.tv_sec  = opt.ntv.tv_sec;
@@ -964,34 +988,34 @@ void miruo_tcpsession_statistics(int view)
   sprintf(tstr, "%02d:%02d:%02d", ctm/3600, (ctm % 3600)/60, ctm % 60);
   fprintf(stderr, "\n");
   fprintf(stderr, "===== Session Statistics =====\n");
-  fprintf(stderr, "Captcha Time      : %s\n",   tstr);
-  fprintf(stderr, "Total Sessions    : %llu\n", opt.count_ts_total);
-  fprintf(stderr, "  Lookup          : %llu\n", opt.count_ts_view);
-  fprintf(stderr, "   - LongConnect  : %llu\n", opt.count_ts_long);
-  fprintf(stderr, "   - LongDelay    : %llu\n", opt.count_sg_delay);
-  fprintf(stderr, "   - Retransmit   : %llu\n", opt.count_sg_retrans);
-  fprintf(stderr, "   - Timeout      : %llu\n", opt.count_ts_timeout);
-  fprintf(stderr, "   - Error        : %llu\n", opt.count_ts_error);
-  fprintf(stderr, "   - RST          : %llu\n", opt.count_rstbreak + opt.count_rstclose);
-  fprintf(stderr, "   - flagment     : %llu\n", opt.count_ip_flagment);
+  fprintf(stderr, "Captcha Time    : %s\n",   tstr);
+  fprintf(stderr, "Total Sessions  : %llu\n", opt.count_ts_total);
+  fprintf(stderr, "  Lookup        : %llu\n", opt.count_ts_view);
+  fprintf(stderr, "    LongConnect : %llu\n", opt.count_ts_long);
+  fprintf(stderr, "    LongDelay   : %llu\n", opt.count_sg_delay);
+  fprintf(stderr, "    Retransmit  : %llu\n", opt.count_sg_retrans);
+  fprintf(stderr, "    Timeout     : %llu\n", opt.count_ts_timeout);
+  fprintf(stderr, "    Error       : %llu\n", opt.count_ts_error);
+  fprintf(stderr, "    RST         : %llu\n", opt.count_rstbreak + opt.count_rstclose);
+  fprintf(stderr, "    flagment    : %llu\n", opt.count_ip_flagment);
   fprintf(stderr, "------------------------------\n");
-  fprintf(stderr, "long connect time : %d [ms]\n", opt.ct_limit);
-  fprintf(stderr, "long delay   time : %d [ms]\n", opt.st_limit);
-  fprintf(stderr, "retransmit   time : %d [ms]\n", opt.rt_limit);
+  fprintf(stderr, "LongConnectTime : %d [ms]\n", opt.ct_limit);
+  fprintf(stderr, "LongDelayTime   : %d [ms]\n", opt.st_limit);
+  fprintf(stderr, "RetransmitTime  : %d [ms]\n", opt.rt_limit);
   fprintf(stderr, "------------------------------\n");
-  fprintf(stderr, "ActiveSession     : %u\n",   opt.count_ts_act);
-  fprintf(stderr, "ActiveSessionMax  : %u\n",   opt.count_ts_max);
-  fprintf(stderr, "ActiveSessionLimit: %u\n",   opt.ts_limit);
-  fprintf(stderr, "ActiveSegment     : %u\n",   opt.count_sg_act);
-  fprintf(stderr, "ActiveSegmentMax  : %u\n",   opt.count_sg_max);
-  fprintf(stderr, "ActiveSegmentLimit: %u\n",   opt.sg_limit);
-  fprintf(stderr, "DropSession       : %u\n",   opt.count_ts_drop);
-  fprintf(stderr, "DropSegment       : %u\n",   opt.count_sg_drop);
+  fprintf(stderr, "ActiveSession   : %u\n",   opt.count_ts_act);
+  fprintf(stderr, "ActiveSessionMax: %u\n",   opt.count_ts_max);
+  fprintf(stderr, "ActiveSessionLim: %u\n",   opt.ts_limit);
+  fprintf(stderr, "ActiveSegment   : %u\n",   opt.count_sg_act);
+  fprintf(stderr, "ActiveSegmentMax: %u\n",   opt.count_sg_max);
+  fprintf(stderr, "ActiveSegmentLim: %u\n",   opt.sg_limit);
+  fprintf(stderr, "DropSession     : %u\n",   opt.count_ts_drop);
+  fprintf(stderr, "DropSegment     : %u\n",   opt.count_sg_drop);
   fprintf(stderr, "------------------------------\n");
-  fprintf(stderr, "CPU utilization   : %u.%u%%\n", cpu/10, cpu%10);
+  fprintf(stderr, "CPU   : %u.%u%%\n", cpu/10, cpu%10);
 if(mi = get_memmory()){
-  fprintf(stderr, "VSZ               : %lluKB\n",  mi->vsz / 1024);
-  fprintf(stderr, "RSS               : %lluKB\n",  mi->res / 1024);
+  fprintf(stderr, "VSZ   : %lluKB\n",  mi->vsz / 1024);
+  fprintf(stderr, "RSS   : %lluKB\n",  mi->res / 1024);
 }
 if(pcap_fileno(opt.p)){
   fprintf(stderr, "===== libpcap Statistics =====\n");
@@ -1038,7 +1062,11 @@ tcpsession *miruo_tcpsession_destroy(tcpsession *c, int view, char *msg, char *r
     if(opt.live){
       fprintf(stdout, "%s%04u:%04u %s %s (%s)%s\n", sc[0], c->sid, c->pkcnt, ts, msg, reason, sc[1]);
     }else{
-      fprintf(stdout, "%s%04u:%04u %s |%s%s%s| %s%s\n", sc[0], c->sid, c->pkcnt, ts, sl, msg, sr, reason, sc[1]);
+      if(opt.quite){
+        fprintf(stdout, "%s%s|%s%s%s|%s%s\n", sc[0], ts, sl, msg, sr, reason, sc[1]);
+      }else{
+        fprintf(stdout, "%s%04u:%04u %s |%s%s%s| %s%s\n", sc[0], c->sid, c->pkcnt, ts, sl, msg, sr, reason, sc[1]);
+      }
     }
   }
   return(del_tcpsession(c));

@@ -6,16 +6,17 @@
 /**************************************************************************/
 
 【はじめに】
-  miruoはパケットキャプチャ型のTCPセッション解析ツールです。
+  miruoはパケットキャプチャ型のTCPセッションモニタです。
   以下のような特徴があります。
 
-  - TCPセッション毎にまとめてパケットを表示できます
-  - パケットが再送されたセッションを抽出できます
-  - ある程度時間がかかったセッションを抽出できます
-  - RSTで中断されたセッションを検出できます
+  - TCPセッション単位でパケットをまとめて表示できます
+  - TCPの接続、切断部分のみをコンパクトに表示できます
+  - セグメントが再送されたTCPセッションを発見できます
+  - 通信に時間がかかったTCPセッションを発見できます
+  - RSTで中断されたTCPセッションを発見できます
+  - IPでフラグメントされたセグメントを発見できます
   - tcpdumpの-wで保存されたファイルを利用できます
-  - 高速で軽量に動作します
-
+  - 軽量で高速に動作します
 
 【インストール方法】
   $ tar zxvf miruo-x.y.z.tar.gz
@@ -24,6 +25,9 @@
   $ make
   $ sudo make install
 
+  注意)
+  Linux以外での動作確認はしていません。ごめんなさい。
+
 【使い方】
 usage: miruo [option] [expression]
   option
@@ -31,30 +35,211 @@ usage: miruo [option] [expression]
    -V, --version                  # version
    -i, --interface=dev            # eth0,bond0,any...
    -v, --view-data=NUM            # 
-   -T, --connection-time=time[ms] # Threshold of connection time for lookup. Default 0ms(off)
-   -t, --long-delay-time=time[ms] # Threshold of long delay time for lookup. Default 0ms(off)
-   -r, --retransmit-time=time[ms] # Threshold of retransmit time for lookup. Default 1000ms
+   -T, --long-connect=time[ms]    # Threshold of connection time for lookup. Default 0ms(off)
+   -t, --long-delay=time[ms]      # Threshold of long delay time for lookup. Default 0ms(off)
+   -r, --retransmit=time[ms]      # Threshold of retransmit time for lookup. Default 1000ms
    -s, --stat=interval[sec]       # statistics view interval. Default 0sec(off)
    -f, --file=file                # read file(for tcpdump -w)
    -S, --syn=[0|1]                # syn retransmit lookup mode.default=1. 0=ignore 1=lookup
    -R, --rst=[0|1|2]              # rst lookup mode.default=1. (see README)
    -F, --flagment=[0|1]           # ip flagment lookup. default=1
    -C, --color=[0|1]              # color 0=off 1=on
-   -L, --limit-session=NUM        # active session limit. Default 1024
-   -l, --limit-segment=NUM        # active segment limit. Default 65536
+   -L, --session-limit=NUM        # active session limit. Default 1024
+   -l, --segment-limit=NUM        # active segment limit. Default 65536
    -q, --qiute                    # 
        --all                      # all session lookup
        --live                     # live mode(all segment lookup)
 
+expressionにはTCPダンプと同じ書式でフィルタを記述できます。
+ただし、"tcp[13] & 2 != 0"などのような、TCPの一部のパケットのみを抽出するルール
+を書いてしまうと、TCPセッションを追跡できなくなるので注意してください。フィルタ
+の書式についてはtcpdumpのmanを参照してください。
+
+良い例)
+ # miruo -T3000 host dbserver and port 3306
+ MySQLに3秒以上接続しているセッションを表示します
+
+悪い例)
+ # miruo -T3000 dst host dbserver and dst port 3306
+ SYN/ACKなどをキャプチャできないのでTCPを追跡できなくなります
+
 
 【オプションの詳細】
+  
+  -h, --help
+  ヘルプを表示します。
 
-[expression]
-TCPダンプと同じ書式でフィルタを指定できます。
-ただし、"tcp[13] & 2 != 0" などのような、TCPの一部のパケットのみを抽出するルール
-を書いてしまうと、セッションを追跡できなくなりますのでご注意ください。フィルタの
-書式についてはtcpdumpのmanを参照してください。
+  -V, --version
+  バージョンを表示します。
+
+  -i, --interface=dev
+　ネットワークインターフェイスを指定します。
+  anyも指定できます。
+
+  -v, --view-data=NUM
+  この値が0の場合は、再送や遅延したパケットと、接続や切断に関するパケットのみを表
+  示します。0以外の値を指定すると、指定された数だけ他のパケットも表示されるように
+  なります。デフォルト値は0です。
+
+  -T, --long-connect=time[ms]
+  接続から切断までの時間が、ここで指定した時間以上だったセッションを表示するよう
+  に指示します。デフォルト値は0で、接続時間による抽出は行いません。
+
+  -t, --long-delay=time[ms]
+  ここで指定した時間よりも、長い時間をかけて到達したパケットを発見します。
+  デフォルト値は0で、到達時間による抽出は行いません。
+
+  -r, --retransmit=time[ms]
+  0を指定すると、再送されたTCPセグメントを無視します。
+  0以外の値を指定すると、指定された時間(ミリ秒単位)以上の時間をかけて再送された
+  セグメントを表示します。デフォルトは1000(ミリ秒)です。
+
+  -s, --stat=interval[sec]
+  定期的にstderrへ統計情報を出力します。
+  デフォルト値は0で、統計情報を表示しません。
+
+  -f, --file=file
+  tcpdump -w で保存したファイルを利用したい時にファイル名を指定してください。
+
+  -S, --syn=[0|1]
+  SYNもしくはSYN/ACKの再送を検出するかどうかを指定します。
+  0: 検出しません
+  1: 検出します
+  SYNとSYN/ACKの再送検出は、rオプションとは独立して処理されます。
+  rオプションの指定内容に関わらず、ここで1を指定すると再送を検出しますし、0を指
+　定すると検出しなくなります。
+
+  -R, --rst=[0|1|2]
+  RSTフラグで中断されたセッションを検出するかどうかを指定します。
+  0: 検出しません
+  1: 検出はしますが、FINを送った後のRSTは検出しません
+  2: 全てのRSTを検出します
+  デフォルト値は1です。
+
+  -F, --flagment=[0|1]
+  IPフラグメントを検出するかどうか指定します。 
+  0: 検出しません。
+  1: 検出します。
+  デフォルト値は1です。 
+
+  -C, --color=[0|1]
+  カラー表示をしたくない場合は0を指定してください。 
+  デフォルトは1ですが、標準出力をファイルに落とす場合や、パイプで他のコマンドに
+  渡す場合は0になります。パイプでgrepなどに渡したいけど、カラー表示をしたいよう
+  な時には明示的に1を指定してください
+
+  -L, --session-limit=NUM
+  同時に保持できるセッション数を指定します。
+　これは、miruoの内部バッファの最大値を指定するオプションで、意図せずに大量のメ
+　モリ（サーバリソース）を使い過ぎないように制限するためのものです。
+  デフォルト値は1024ですが、統計情報(後述)の DropSessionの項目が0ならば増やす必
+  要はないでしょう。
+
+  -l, --segment-limit=NUM
+  同時に保持できるセグメント数を指定します。
+　これは、miruoの内部バッファの最大値を指定するオプションで、意図せずに大量のメ
+　モリ（サーバリソース）を使い過ぎないように制限するためのものです。
+  デフォルト値は65536ですが、統計情報(後述)の DropSegment の項目が0ならば増やす
+  必要はないでしょう。
+
+  -q, --qiute
+  シンプルな表示になります。
+  横幅が80文字以内じゃないと我慢出来ない場合に指定するとよいかもです。
+
+  --all
+  すべてのセッションを表示します。
+
+  --live
+  すべてのパケットをリアルタイムに表示します。
 
 
+[統計情報]
 
+sオプションを指定すると、定期的にstderrへ統計情報を出力するようになります。
+各項目の意味は以下のとおりです。
+
+===== Session Statistics =====
+Captcha Time    : 00:01:03     開始してからの経過時間
+Total Sessions  : 0            追跡したTCPセッションの数
+  Lookup        : 0            表示したTCPセッションの数
+    LongConnect : 0            LongConnectTimeを超えたセッションの数
+    LongDelay   : 0            LongDelayTimeを超えたセッションの数
+    Retransmit  : 0            再送が発生したセッションの数
+    Timeout     : 0            タイムアウトしたセッションの数
+    Error       : 0            追跡しきれなくてエラーになった数
+    RST         : 0            RSTでリセットされたセッションの数
+    flagment    : 0            IPフラグメントされたセッションの数
+------------------------------
+LongConnectTime : 0 [ms]       -Tオプションの設定値
+LongDelayTime   : 0 [ms]       -tオプションの設定値
+RetransmitTime  : 1000 [ms]    -rオプションの設定値
+------------------------------
+ActiveSession   : 0            現在追跡しているTCPセッションの数
+ActiveSessionMax: 0            同時に追跡したTCPセッションの最大数
+ActiveSessionLim: 1024         同時に追跡可能なTCPセッションの最大数(-Lオプションで指定)
+ActiveSegment   : 0            現在保持しているTCPセグメントの数
+ActiveSegmentMax: 0            同時に保持する必要があったセグメントの最大数
+ActiveSegmentLim: 65536        同時に保持可能なセグメントの最大数(-lオプションで指定)
+DropSession     : 0            保持しきれなくて捨ててしまったTCPセッションの数
+DropSegment     : 0            保持しきれなくて捨ててしまったTCPセグメントの数
+------------------------------
+CPU   : 0.0%                   miruoのCPU使用率
+VSZ   : 6100KB                 miruoが確保した仮想メモリサイズ
+RSS   : 2932KB                 miruoが利用している物理メモリサイズ
+===== libpcap Statistics =====
+recv  : 89                     libpcapがキャプチャできたパケット数
+drop  : 0                      libpcapがドロップしたパケット数
+ifdrop: 0                      インターフェイスがドロップしたパケット数
+===== Header Error Count =====
+L2    : 0                      データリンク層のヘッダ解析に失敗した数
+IP    : 0                      IPヘッダの解析に失敗した数
+TCP   : 0                      TCPヘッダの解析に失敗した数
+==============================
+
+
+[表示結果の説明]
+-------------------------------------------------------------------------------
+3615             2.196 |  192.168.61.88:38001 == 192.168.56.136:3306  | Total 92 segments, 43278 bytes
+3615:0000 17:57:19.193 |          SYN_SENT >----S-> SYN_RECV          | 5C503355/00000000   74 - <mss=1460, sackOK, timestamp 898447130 0, wscale=7>
+3615:0001 17:57:19.193 |       ESTABLISHED <-A--S-< SYN_RECV          | 6BCBB846/5C503356   74 - <mss=1460, sackOK, timestamp 899636678 898447130, wscale=7>
+3615:0002 17:57:19.193 |       ESTABLISHED >-A----> ESTABLISHED       | 5C503356/6BCBB847   66 - <timestamp 898447130 899636678>
+3615:0003 17:57:19.193 |       ESTABLISHED <-AP---< ESTABLISHED       | 6BCBB847/5C503356  126 - <timestamp 899636678 898447130>
+3615:0004 17:57:19.193 |       ESTABLISHED >-A----> ESTABLISHED       | 5C503356/6BCBB883   66 - <timestamp 898447130 899636678>
+3615:0005 17:57:19.193 |       ESTABLISHED >-AP---> ESTABLISHED       | 5C503356/6BCBB883  150 - <timestamp 898447130 899636678>
+3615:****              |                                              |
+3615:0085 17:57:19.265 |       ESTABLISHED <-A----< ESTABLISHED       | 6BCC1685/5C505E8E 1514 - <timestamp 899636696 898447148>
+3615:0086 17:57:19.265 |       ESTABLISHED <-AP---< ESTABLISHED       | 6BCC1C2D/5C505E8E  687 - <timestamp 899636696 898447148>
+3615:0087 17:57:19.265 |       ESTABLISHED >-A----> ESTABLISHED       | 5C505E8E/6BCC1E9A   66 - <timestamp 898447148 899636696>
+3615:0088 17:57:21.389 |       ESTABLISHED >-AP---> ESTABLISHED       | 5C505E8E/6BCC1E9A   71 - <timestamp 898447679 899636696>
+3615:0089 17:57:21.389 |         FIN_WAIT1 >-A---F> ESTABLISHED       | 5C505E93/6BCC1E9A   66 - <timestamp 898447679 899636696>
+3615:0090 17:57:21.389 |         FIN_WAIT2 <-A---F< LAST_ACK          | 6BCC1E9A/5C505E94   66 - <timestamp 899637227 898447679>
+3615:0091 17:57:21.389 |         TIME_WAIT >-A----> CLOSED            | 5C505E94/6BCC1E9B   66 - <timestamp 898447679 899637227>
+-------------------------------------------------------------------------------
+一番左の3615を、「セッションID」と呼びます。値自体には意味はなく、新しいTCPセッ
+ションが開始される度にmiruoが内部でインクリメントして割り当てていきます。その隣
+のコロンで区切られた数値を「パケットID」と呼びます。最初のSYNを0番とし、パケッ
+トが到着する度にインクリメントしていきます。「セッションID」と「パケットID」は、
+TCPやIPのプロトコルとは全く無関係なパラメータで、miruoの内部で利用している管理
+用のIDです。そのため、値自体は特別な意味を持ちませんが、上記の表示例の場合だと、
+
+「3615の88番のパケットが、到着するまでに2秒以上かかっているみたい」
+
+などと表現できるので、問題点を他の人と共有する際に便利だと思います。
+
+次に表示しているのはパケットをキャプチャした時刻です。
+先頭の行は接続時間（接続から切断までの経過時間）を表しており、この時間がTオプシ
+ョンで指定した値を超えたセッションが表示されます。
+
+中央の広い部分は、見ての通りなので説明は割愛します(^^;
+
+5C503355/00000000 や 6BCBB846/5C503356 はTCPヘッダのシーケンス番号/応答番号です。
+
+74とか66とか1514の数値はパケットサイズです。
+環境によっては1514以上の値が表示される場合があるかもしれませんが、それはきっと、
+故障でもバグでもなく、TOE(TCP Offload Engine)の影響だと思います。
+
+'-'と表示されている部分には、IPのフラグメントが発生している場合に'F'と表示される
+ようになります。Fオプションに0を指定すると、この項目は表示されません。
+
+最後の<>で囲まれている部分は、TCPヘッダのオプションです。
 
