@@ -42,6 +42,26 @@ void usage()
   printf("    miruo -i eth0 -T5000 src host 192.168.0.1\n");
 }
 
+int is_numeric(char *str)
+{
+  if(str == NULL){
+    return(0);
+  }
+  if(*str == 0){
+    return(0);
+  }
+  if((*str == '-') || (*str == '+')){
+    str++;
+  }
+  while(*str){
+    if((*str < '0') || (*str > '9')){
+      return(0);
+    }
+    str++;
+  }
+  return(1);
+}
+
 int get_cpu_utilization()
 {
   int cpu;
@@ -1630,14 +1650,9 @@ struct option *get_optlist()
 
 void miruo_setopt(int argc, char *argv[])
 {
-  int   i;
-  int   r;
-  char *F[8];
-  memset(F, 0, sizeof(F));
-  F[MIRUO_MODE_TCP]   = NULL;
-  F[MIRUO_MODE_HTTP]  = NULL;
-  F[MIRUO_MODE_MYSQL] = NULL;
-  while((r = getopt_long_only(argc, argv, "hVqAF:C:S:R:v:L:l:T:t:r:m:s:f:i:", get_optlist(), NULL)) != -1){
+  int i;
+  int r;
+  while((r = getopt_long_only(argc, argv, "+hVqAF:C:S:R:v:L:l:T:t:r:m:s:f:i:", get_optlist(), NULL)) != -1){
     switch(r){
       case 500:
         opt.all = 1;
@@ -1656,37 +1671,92 @@ void miruo_setopt(int argc, char *argv[])
         opt.quite++;
         break;
       case 'F':
-        printf("f=%d\n", opt.flagment);
+        if(is_numeric(optarg)){
+          opt.flagment = atoi(optarg);
+        }else{
+          usage();
+          miruo_finish(1);
+        }
         break;
       case 'R':
-        opt.rstmode = atoi(optarg);
+        if(is_numeric(optarg)){
+          opt.rstmode = atoi(optarg);
+        }else{
+          usage();
+          miruo_finish(1);
+        }
         break;
       case 'S':
-        opt.rsynfind = atoi(optarg);
+        if(is_numeric(optarg)){
+          opt.rsynfind = atoi(optarg);
+        }else{
+          usage();
+          miruo_finish(1);
+        }
         break;
       case 'v':
-        opt.viewdata = atoi(optarg);
+        if(is_numeric(optarg)){
+          opt.viewdata = atoi(optarg);
+        }else{
+          usage();
+          miruo_finish(1);
+        }
         break;
       case 'C':
-        opt.color = atoi(optarg);
+        if(is_numeric(optarg)){
+          opt.color = atoi(optarg);
+        }else{
+          usage();
+          miruo_finish(1);
+        }
         break;
       case 'L':
-        opt.ts_limit = atoi(optarg);
+        if(is_numeric(optarg)){
+          opt.ts_limit = atoi(optarg);
+        }else{
+          usage();
+          miruo_finish(1);
+        }
         break;
       case 'l':
-        opt.sg_limit = atoi(optarg);
+        if(is_numeric(optarg)){
+          opt.sg_limit = atoi(optarg);
+        }else{
+          usage();
+          miruo_finish(1);
+        }
         break;
       case 'T':
-        opt.ct_limit = atoi(optarg);
+        if(is_numeric(optarg)){
+          opt.ct_limit = atoi(optarg);
+        }else{
+          usage();
+          miruo_finish(1);
+        }
         break;
       case 't':
-        opt.st_limit = atoi(optarg);
+        if(is_numeric(optarg)){
+          opt.st_limit = atoi(optarg);
+        }else{
+          usage();
+          miruo_finish(1);
+        }
         break;
       case 'r':
-        opt.rt_limit = atoi(optarg);
+        if(is_numeric(optarg)){
+          opt.rt_limit = atoi(optarg);
+        }else{
+          usage();
+          miruo_finish(1);
+        }
         break;
       case 's':
-        opt.stattime = atoi(optarg);
+        if(is_numeric(optarg)){
+          opt.stattime = atoi(optarg);
+        }else{
+          usage();
+          miruo_finish(1);
+        }
         break;
       case 'f':
         strcpy(opt.file, optarg);
@@ -1699,7 +1769,7 @@ void miruo_setopt(int argc, char *argv[])
       case 'i':
         strcpy(opt.dev, optarg);
         break;
-      case '?':
+      default:
         usage();
         miruo_finish(1);
     }
@@ -1709,12 +1779,6 @@ void miruo_setopt(int argc, char *argv[])
       strcat(opt.exp, " ");
     }
     strcat(opt.exp, argv[i]);
-  }
-  if(F[opt.mode]){
-    if(strlen(opt.exp)){
-      strcat(opt.exp, " and ");
-    }
-    strcat(opt.exp, F[opt.mode]);
   }
 }
 

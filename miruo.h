@@ -154,8 +154,8 @@ typedef struct tcpsegment
 typedef struct tcpsession
 {
   uint16_t   sid;            // セッションID
-  uint8_t   view;            // セッションを表示する必要があるなら1になる
-  uint8_t  zview;            // 
+  uint8_t   view;            // このセッションを表示する場合は1
+  uint8_t  zview;            // ついでに表示するセグメントの残数
   uint32_t pkcnt;            // 現在保持しているパケット数
   uint32_t pkall;            // このセッションで飛び交った総パケット数
   uint32_t szall;            // このセッションで飛び交った総データサイズ(L2/L3ヘッダも含む)

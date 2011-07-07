@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.61)
-AC_INIT(miruo, 0.9.1, info-miruo@klab.jp)
+AC_INIT(miruo, 0.9.2, info-miruo@klab.jp)
 AM_INIT_AUTOMAKE
 AC_CONFIG_SRCDIR([miruo.c])
 AC_CONFIG_HEADER([config.h])
@@ -11,7 +11,6 @@ AC_CONFIG_HEADER([config.h])
 AC_PROG_CC
 
 # Checks for libraries.
-AC_CHECK_LIB(pcap, pcap_open_live)
 
 # Checks for header files.
 AC_HEADER_STDC
@@ -32,6 +31,26 @@ AC_FUNC_MALLOC
 AC_FUNC_MEMCMP
 AC_FUNC_SELECT_ARGTYPES
 AC_CHECK_FUNCS([gettimeofday inet_ntoa memset select strerror])
+
+LIBPCAPPATH="/usr"
+AC_ARG_WITH(libpcap,
+AC_HELP_STRING([--with-libpcap=PATH],[path to libpcap installation]),
+  [
+    LIBPCAPPATH="$withval"
+    LDFLAGS="-L$LIBPCAPPATH/lib -Wl,-rpath -Wl,$LIBPCAPPATH/lib $LDFLAGS"
+    CPPFLAGS="-I$LIBPCAPPATH/include $CPPFLAGS"
+  ]
+)
+
+AC_ARG_ENABLE(libpcap-static,
+  AC_HELP_STRING([--enable-libpcap-static],[libpcap static link]),
+  [
+    LIBS="$LIBS $LIBPCAPPATH/lib/libpcap.a"
+  ],
+  [
+    LIBS="$LIBS -lpcap"
+  ]
+)
 
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT
