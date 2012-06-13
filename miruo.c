@@ -1619,6 +1619,7 @@ int miruo_init()
   opt.sg_limit = 65536;
   opt.color    = isatty(fileno(stdout));
   opt.mode     = MIRUO_MODE_TCP;
+  setvbuf(stdout, 0, _IONBF, 0);
 }
 
 struct option *get_optlist()
