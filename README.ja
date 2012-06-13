@@ -46,6 +46,7 @@ usage: miruo [option] [expression]
    -C, --color=[0|1]              # color 0=off 1=on
    -L, --session-limit=NUM        # active session limit. Default 1024
    -l, --segment-limit=NUM        # active segment limit. Default 65536
+   -m, --dpi-mode=mode            # deep packet inspection mode. (now support only http)
    -q, --qiute                    # 
        --all                      # all session lookup
        --live                     # live mode(all segment lookup)
@@ -141,6 +142,11 @@ expressionにはTCPダンプと同じ書式でフィルタを記述できます�
 　モリ（サーバリソース）を使い過ぎないように制限するためのものです。
   デフォルト値は65536ですが、統計情報(後述)の DropSegment の項目が0ならば増やす
   必要はないでしょう。
+
+  -m, --dpi-mode=mode
+  セグメントのペイロードを解析してプロトコル固有の情報を表示したい場合は以下の
+  モード（プロトコル名）を指定します。
+  http: HTTPリクエスト・レスポンスの情報を表示します
 
   -q, --qiute
   シンプルな表示になります。
