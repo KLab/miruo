@@ -146,6 +146,9 @@ typedef struct tcpsegment
   uint32_t ackno;          // 応答番号
   uint8_t  optsize;        // TCPオプションのサイズ
   uint8_t  opt[40];        // TCPヘッダからコピーしたオプションデータ
+  uint16_t plen;
+  uint8_t  *payload;
+  uint8_t  *dpimsg;        // DPIメッセージ
   struct timeval ts;       // パケットをキャプチャした時間
   struct tcpsegment *prev; // 前のセグメント
   struct tcpsegment *next; // 次のセグメント

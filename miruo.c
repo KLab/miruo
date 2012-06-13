@@ -30,6 +30,7 @@ void usage()
   printf("   -C, --color=[0|1]              # color 0=off 1=on\n");
   printf("   -L, --session-limit=NUM        # active session limit. Default 1024\n");
   printf("   -l, --segment-limit=NUM        # active segment limit. Default 65536\n");
+  printf("   -m, --dpi-mode=mode            # deep packet inspection mode. (now support only http)\n");
   printf("   -q, --qiute                    # \n");
   printf("       --all                      # all session lookup\n");
   printf("       --live                     # live mode(all segment lookup)\n");
@@ -592,6 +593,7 @@ void free_tcpsegment_pool(tcpsegment *packet)
   if(packet == NULL){
     return;
   }
+  free(packet->dpimsg);
   free(packet);
   return;
   packet->prev = NULL;
@@ -851,6 +853,27 @@ void print_acttcpsession(FILE *fp)
   }
 }
 
+void print_dpimsg(FILE *fp, tcpsegment *sg)
+{
+  char cl[2][16];
+
+  cl[0][0] = 0;
+  cl[1][0] = 0;
+  if(opt.color){
+    sprintf(cl[0], "\x1b[3%dm", COLOR_GREEN);
+    sprintf(cl[1], "\x1b[39m");
+  }
+  if(sg && sg->dpimsg){
+    switch(opt.mode){
+      case MIRUO_MODE_TCP:
+        break;
+      case MIRUO_MODE_HTTP:
+        fprintf(fp, "%s%s%s\n", cl[0], sg->dpimsg, cl[1]);
+        break;
+    }
+  }
+}
+
 void print_tcpsession(FILE *fp, tcpsession *c)
 {
   struct tm *t;               //
@@ -931,6 +954,7 @@ void print_tcpsession(FILE *fp, tcpsession *c)
             sg->seqno, 
             sg->ackno,
           cl[1]);
+        print_dpimsg(fp, sg);
         if(sg->next && sg->next->view){
           fprintf(fp, "%12s|%46s|\n", "", "");
         }
@@ -947,6 +971,7 @@ void print_tcpsession(FILE *fp, tcpsession *c)
             fs,
             tcp_opt_str(sg->opt, sg->optsize), 
           cl[1]);
+        print_dpimsg(fp, sg);
         if(sg->next && sg->next->view){
           fprintf(fp, "%04u:**** %12s |%46s|\n", c->sid, "", "");
         }
@@ -969,6 +994,7 @@ void print_tcpsession(FILE *fp, tcpsession *c)
           fs,
           tcp_opt_str(sg->opt, sg->optsize), 
         cl[1]);
+      print_dpimsg(fp, sg);
     }
     sg->view = 1;
   }
@@ -1426,6 +1452,9 @@ int miruo_tcpsession_setstatus(tcpsession *c, tcpsegment *s)
       s->color = COLOR_RED;
       break;
   }
+  if(s->dpimsg){
+    s->view = 0;
+  }
   c->st[s->sno] = s->st[0];
   c->st[s->rno] = s->st[1];
   return(0);
@@ -1487,12 +1516,90 @@ tcpsession *read_tcpsession(tcpsession *c, const struct pcap_pkthdr *ph, const u
   segment->seqno      = th.seqno;
   segment->ackno      = th.ackno;
   segment->optsize    = th.offset - 20;
+  segment->plen       = l;
+  segment->payload    = (uint8_t *)p;
   segment->ts.tv_sec  = ph->ts.tv_sec;
   segment->ts.tv_usec = ph->ts.tv_usec;
   memcpy(segment->opt, th.opt, segment->optsize);
   return(c);
 }
 
+/************************************************
+ *
+ * Deep Packet Inspection
+ *
+ ************************************************/
+char *uristrip(char *uri)
+{
+  char *ptr;
+
+  ptr = strchr(uri, '?');
+  if(ptr){
+    *ptr = '\0';
+  }
+  return uri;
+}
+
+void miruo_dpi_probe_http(tcpsegment *sg)
+{
+  char buf[2048], dpimsg[2048], *token, *method, *uri, *ver, *host, *code, *msg;
+
+  if(!sg->plen){
+    return;
+  }
+  memset(buf, 0x00, sizeof(buf));
+  strncpy(buf, sg->payload, sg->plen < sizeof(buf) ? sg->plen : sizeof(buf) - 1);
+  if((token = strtok(buf, " \r\n")) == NULL){
+    return;
+  }
+  if(strcmp(token, "GET") == 0 || strcmp(token, "POST") == 0){
+    method = token;
+    if((uri = strtok(NULL, " \r\n")) == NULL){
+      return;
+    }
+    if((ver = strtok(NULL, " \r\n")) == NULL){
+      return;
+    }
+    host = NULL;
+    while((token = strtok(NULL, ":\r\n"))){
+      if(strcmp(token, "Host") == 0){
+        host = strtok(NULL, " \r\n");
+        break;
+      }
+    }
+    if(host){
+      snprintf(dpimsg, sizeof(dpimsg), "DPI:HTTP:RequestLine >>>> %s %s %s\nDPI:HTTP:Header >>>>>>>>> Host: %s", method, uristrip(uri), ver, host ? host : "");
+    }else{
+      snprintf(dpimsg, sizeof(dpimsg), "DPI:HTTP:RequestLine >>>> %s %s %s", method, uristrip(uri), ver);
+    }
+    sg->dpimsg = strdup(dpimsg);
+  }else if(strcmp(token, "HTTP/1.0") == 0 || strcmp(token, "HTTP/1.1") == 0){
+    ver = token;
+    if((code = strtok(NULL, " \r\n")) == NULL || strlen(code) != 3 || !is_numeric(code)){
+      return;
+    }
+    msg = strtok(NULL, " \r\n");
+    snprintf(dpimsg, sizeof(dpimsg), "DPI:HTTP:ResponseLine >>> %s %s %s", ver, code, msg ? msg : "");
+    sg->dpimsg = strdup(dpimsg);
+  }
+  sg->plen = 0;
+  sg->payload = NULL;
+}
+
+void miruo_dpi_probe(tcpsession *s, tcpsegment *sg)
+{
+  if(!s || s->st[0] != MIRUO_STATE_TCP_EST || s->st[1] != MIRUO_STATE_TCP_EST){
+    return;
+  }
+  switch(opt.mode){
+    case MIRUO_MODE_TCP:
+      // ignore
+      break;
+    case MIRUO_MODE_HTTP:
+      miruo_dpi_probe_http(sg);
+      break;
+  }
+}
 /************************************************
  *
  * TCPセッションモニタ
@@ -1511,6 +1618,7 @@ void miruo_tcpsession(u_char *u, const struct pcap_pkthdr *ph, const u_char *p)
   c = get_active_tcpsession(&ts);
   c = miruo_tcpsession_connect(c, &ts, &connect);
   if(connect == 0){
+    miruo_dpi_probe(c, &(ts.segment));
     if(tcp_retransmit(c, &(ts.segment))){
       return;
     }
@@ -1611,7 +1719,7 @@ int miruo_init()
   opt.rsynfind = 1;
   opt.rstmode  = 1;
   opt.stattime = 0;
-  opt.pksize   = 96;
+  opt.pksize   = 1522;
   opt.ct_limit = 0;
   opt.st_limit = 0;
   opt.rt_limit = 1000;
@@ -1764,6 +1872,11 @@ void miruo_setopt(int argc, char *argv[])
       case 'm':
         if(strcmp("tcp", optarg) == 0){
           opt.mode = MIRUO_MODE_TCP;
+        }else if(strcmp("http", optarg) == 0){
+          opt.mode = MIRUO_MODE_HTTP;
+        }else{
+          usage();
+          miruo_finish(1);
         }
         break;
       case 'i':
@@ -1905,6 +2018,7 @@ void miruo_execute()
   printf("listening on %s, link-type %s (%s), capture size %d bytes\n", opt.dev, opt.lkname, opt.lkdesc, opt.pksize);
   switch(opt.mode){
     case MIRUO_MODE_TCP:
+    case MIRUO_MODE_HTTP:
       miruo_execute_tcpsession();
       break;
     default:
