@@ -1578,7 +1578,7 @@ void miruo_dpi_probe_http(tcpsegment *sg)
     if((code = strtok(NULL, " \r\n")) == NULL || strlen(code) != 3 || !is_numeric(code)){
       return;
     }
-    msg = strtok(NULL, " \r\n");
+    msg = strtok(NULL, "\r\n");
     snprintf(dpimsg, sizeof(dpimsg), "DPI:HTTP:ResponseLine >>> %s %s %s", ver, code, msg ? msg : "");
     sg->dpimsg = strdup(dpimsg);
   }
@@ -1748,7 +1748,7 @@ struct option *get_optlist()
       "long-connect",    1, NULL, 'T',
       "long-delay",      1, NULL, 't',
       "retransmit",      1, NULL, 'r',
-      "mode",            1, NULL, 'm',
+      "dpi-mode",        1, NULL, 'm',
       "stat-interval",   1, NULL, 's',
       "file",            1, NULL, 'f',
       "interface",       1, NULL, 'i',
