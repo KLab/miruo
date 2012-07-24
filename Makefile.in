@@ -48,7 +48,7 @@ CONFIG_CLEAN_FILES =
 am__installdirs = "$(DESTDIR)$(sbindir)"
 sbinPROGRAMS_INSTALL = $(INSTALL_PROGRAM)
 PROGRAMS = $(sbin_PROGRAMS)
-am_miruo_OBJECTS = miruo.$(OBJEXT)
+am_miruo_OBJECTS = miruo.$(OBJEXT) lnklist.$(OBJEXT)
 miruo_OBJECTS = $(am_miruo_OBJECTS)
 miruo_LDADD = $(LDADD)
 DEFAULT_INCLUDES = -I.@am__isrc@
@@ -157,7 +157,7 @@ sysconfdir = @sysconfdir@
 target_alias = @target_alias@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
-miruo_SOURCES = miruo.c miruo.h
+miruo_SOURCES = miruo.c miruo.h lnklist.c lnklist.h
 all: config.h
 	$(MAKE) $(AM_MAKEFLAGS) all-am
 
@@ -246,6 +246,7 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lnklist.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/miruo.Po@am__quote@
 
 .c.o:

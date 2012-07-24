@@ -1,6 +1,7 @@
 #include "miruo.h"
 
 miruopt opt;
+miruopt_dpi dpi;
 void version()
 {
   const char *libpcap = pcap_lib_version();
@@ -593,7 +594,7 @@ void free_tcpsegment_pool(tcpsegment *packet)
   if(packet == NULL){
     return;
   }
-  free(packet->dpimsg);
+  lnklist_destroy_with_destructor(packet->dpimsg, free);
   free(packet);
   return;
   packet->prev = NULL;
@@ -868,7 +869,10 @@ void print_dpimsg(FILE *fp, tcpsegment *sg)
       case MIRUO_MODE_TCP:
         break;
       case MIRUO_MODE_HTTP:
-        fprintf(fp, "%s%s%s\n", cl[0], sg->dpimsg, cl[1]);
+        lnklist_iter_init(sg->dpimsg);
+        while(lnklist_iter_hasnext(sg->dpimsg)){
+          fprintf(fp, "%s%s%s\n", cl[0], lnklist_iter_next(sg->dpimsg), cl[1]);
+        }
         break;
     }
   }
@@ -1540,47 +1544,95 @@ char *uristrip(char *uri)
   return uri;
 }
 
+char *
+strtrim(char *str) {
+  char *sp, *ep;
+
+  if(!str) {
+    return NULL;
+  }
+  for(sp = str; *sp; sp++) {
+    if(!isspace(*sp)) {
+      break;
+    }
+  }
+  for(ep = (str + strlen(str)); ep > sp; ep--) {
+    if(!isspace(*(ep - 1))) {
+      break;
+    }
+  }
+  memmove(str, sp, ep - sp);
+  str[ep - sp] = '\0';
+  return str;
+}
+
 void miruo_dpi_probe_http(tcpsegment *sg)
 {
-  char buf[2048], dpimsg[2048], *token, *method, *uri, *ver, *host, *code, *msg;
+  char buf[2048], message[1024];
+  char *delim, *token, *method, *uri, *ver, *hdr, *val, *code, *msg;
 
   if(!sg->plen){
     return;
   }
   memset(buf, 0x00, sizeof(buf));
   strncpy(buf, sg->payload, sg->plen < sizeof(buf) ? sg->plen : sizeof(buf) - 1);
-  if((token = strtok(buf, " \r\n")) == NULL){
+  delim = strstr(buf, "\r\n\r\n");
+  if(delim){
+    *delim = '\0';
+  }
+  if(!(token = strtok(buf, " \r\n"))){
     return;
   }
   if(strcmp(token, "GET") == 0 || strcmp(token, "POST") == 0){
     method = token;
-    if((uri = strtok(NULL, " \r\n")) == NULL){
+    if(!(uri = strtok(NULL, " \r\n"))){
       return;
     }
-    if((ver = strtok(NULL, " \r\n")) == NULL){
+    if(!(ver = strtok(NULL, " \r\n"))){
       return;
     }
-    host = NULL;
+    sg->dpimsg = lnklist_create();
+    snprintf(message, sizeof(message), "DPI:HTTP:RequestLine >>>> %s %s %s", method, uristrip(uri), ver);
+    lnklist_add_tail(sg->dpimsg, strdup(message));
     while((token = strtok(NULL, ":\r\n"))){
-      if(strcmp(token, "Host") == 0){
-        host = strtok(NULL, " \r\n");
-        break;
+      lnklist_iter_init(dpi.http.reqhdr);
+      while(lnklist_iter_hasnext(dpi.http.reqhdr)){
+        hdr = lnklist_iter_next(dpi.http.reqhdr);
+        if(strcmp(token, hdr) == 0 || strcmp(hdr, "%") == 0){
+          val = strtrim(strtok(NULL, "\r\n"));
+          if(strcmp(token, "Referer") == 0){
+            uristrip(val);
+          }
+          snprintf(message, sizeof(message), "DPI:HTTP:Header >>>>>>>>> %s: %s", token, val ? val : "");
+          lnklist_add_tail(sg->dpimsg, strdup(message));
+          break;
+        }
       }
     }
-    if(host){
-      snprintf(dpimsg, sizeof(dpimsg), "DPI:HTTP:RequestLine >>>> %s %s %s\nDPI:HTTP:Header >>>>>>>>> Host: %s", method, uristrip(uri), ver, host ? host : "");
-    }else{
-      snprintf(dpimsg, sizeof(dpimsg), "DPI:HTTP:RequestLine >>>> %s %s %s", method, uristrip(uri), ver);
-    }
-    sg->dpimsg = strdup(dpimsg);
   }else if(strcmp(token, "HTTP/1.0") == 0 || strcmp(token, "HTTP/1.1") == 0){
     ver = token;
-    if((code = strtok(NULL, " \r\n")) == NULL || strlen(code) != 3 || !is_numeric(code)){
+    if(!(code = strtok(NULL, " \r\n")) || strlen(code) != 3 || !is_numeric(code)){
       return;
     }
     msg = strtok(NULL, "\r\n");
-    snprintf(dpimsg, sizeof(dpimsg), "DPI:HTTP:ResponseLine >>> %s %s %s", ver, code, msg ? msg : "");
-    sg->dpimsg = strdup(dpimsg);
+    sg->dpimsg = lnklist_create();
+    snprintf(message, sizeof(message), "DPI:HTTP:ResponseLine >>> %s %s %s", ver, code, msg ? msg : "");
+    lnklist_add_tail(sg->dpimsg, strdup(message));
+    while((token = strtok(NULL, ":\r\n"))){
+      lnklist_iter_init(dpi.http.reshdr);
+      while(lnklist_iter_hasnext(dpi.http.reshdr)){
+        hdr = lnklist_iter_next(dpi.http.reshdr);
+        if(strcmp(token, hdr) == 0 || strcmp(hdr, "%") == 0){
+          val = strtrim(strtok(NULL, "\r\n"));
+          if(strcmp(token, "Referer") == 0){
+            uristrip(val);
+          }
+          snprintf(message, sizeof(message), "DPI:HTTP:Header >>>>>>>>> %s: %s", token, val ? val : "");
+          lnklist_add_tail(sg->dpimsg, strdup(message));
+          break;
+        }
+      }
+    }
   }
   sg->plen = 0;
   sg->payload = NULL;
@@ -1642,6 +1694,8 @@ void miruo_finish(int code)
     pcap_close(opt.p);
     opt.p = NULL;
   }
+  lnklist_destroy_with_destructor(dpi.http.reqhdr, free);
+  lnklist_destroy_with_destructor(dpi.http.reshdr, free);
   exit(code);
 }
 
@@ -1761,6 +1815,7 @@ void miruo_setopt(int argc, char *argv[])
 {
   int i;
   int r;
+  char *reqhdr, *reshdr, *hdr;
   while((r = getopt_long_only(argc, argv, "+hVqAF:C:S:R:v:L:l:T:t:r:m:s:f:i:", get_optlist(), NULL)) != -1){
     switch(r){
       case 500:
@@ -1873,7 +1928,23 @@ void miruo_setopt(int argc, char *argv[])
       case 'm':
         if(strcmp("tcp", optarg) == 0){
           opt.mode = MIRUO_MODE_TCP;
-        }else if(strcmp("http", optarg) == 0){
+        }else if(strncmp("http", optarg, 4) == 0 && (!optarg[4] || optarg[4] == ':')){
+          dpi.http.reqhdr = lnklist_create();
+          dpi.http.reshdr = lnklist_create();
+          if(optarg[4]){
+            reqhdr = optarg + 5;
+            reshdr = strchr(reqhdr, ':');
+            if(reshdr){
+              *(reshdr++) = '\0';
+            }
+            for(hdr = strtok(reqhdr, ","); hdr; hdr = strtok(NULL, ",")){
+              lnklist_add_tail(dpi.http.reqhdr, strdup(hdr));
+            }
+            for(hdr = strtok(reshdr, ","); hdr; hdr = strtok(NULL, ",")){
+              lnklist_add_tail(dpi.http.reshdr, strdup(hdr));
+            }
+          }
+          lnklist_add_tail(dpi.http.reqhdr, strdup("Host"));
           opt.mode = MIRUO_MODE_HTTP;
         }else{
           usage();
