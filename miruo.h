@@ -22,6 +22,7 @@
 #include<netinet/in.h>
 #include<arpa/inet.h>
 #include<pcap.h>
+#include"lnklist.h"
 
 /****** COLOR CODE *****/
 #define COLOR_RED     1
@@ -148,7 +149,7 @@ typedef struct tcpsegment
   uint8_t  opt[40];        // TCPヘッダからコピーしたオプションデータ
   uint16_t plen;
   uint8_t  *payload;
-  uint8_t  *dpimsg;        // DPIメッセージ
+  struct lnklist *dpimsg;  // DPIメッセージ
   struct timeval ts;       // パケットをキャプチャした時間
   struct tcpsegment *prev; // 前のセグメント
   struct tcpsegment *next; // 次のセグメント
@@ -194,6 +195,15 @@ typedef struct meminfo
   uint64_t  data;
   long page_size;
 } meminfo;
+
+typedef union miruopt_dpi
+{
+  struct
+  {
+    struct lnklist *reqhdr;
+    struct lnklist *reshdr;
+  } http;
+} miruopt_dpi;
 
 typedef struct miruopt
 {
@@ -250,4 +260,4 @@ typedef struct miruopt
 } miruopt;
 
 extern miruopt opt;
-
+extern miruopt_dpi dpi;
