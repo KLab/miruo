@@ -1,8 +1,8 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_PREREQ(2.61)
-AC_INIT(miruo, 0.9.3, info-miruo@klab.jp)
+AC_PREREQ([2.67])
+AC_INIT(miruo, 0.9.4, info-miruo@klab.jp)
 AM_INIT_AUTOMAKE
 AC_CONFIG_SRCDIR([miruo.c])
 AC_CONFIG_HEADER([config.h])
