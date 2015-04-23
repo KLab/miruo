@@ -18,7 +18,7 @@
 #include<sys/types.h>
 #include<sys/stat.h>
 #include<sys/socket.h>
-#ifdef HAVE_EPOLL
+#ifdef HAVE_SYS_EPOLL_H
 #include<sys/epoll.h>
 #else
 #include<poll.h>

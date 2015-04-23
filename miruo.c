@@ -2037,7 +2037,7 @@ void miruo_execute_tcpsession_live()
   int fd;
   int nf;
   struct timeval tv;
-#ifdef HAVE_EPOLL
+#ifdef HAVE_SYS_EPOLL_H
   int eh;
   struct epoll_event ev;
 #else
@@ -2045,7 +2045,7 @@ void miruo_execute_tcpsession_live()
 #endif
 
   fd = pcap_fileno(opt.p);
-#ifdef HAVE_EPOLL
+#ifdef HAVE_SYS_EPOLL_H
   eh = epoll_create(1);
   if(eh == -1){
     fprintf(stderr, "%s: [error] %s\n", __func__, strerror(errno));
@@ -2069,7 +2069,7 @@ void miruo_execute_tcpsession_live()
       miruo_tcpsession_statistics(0);
       miruo_tcpsession_timeout();
     }
-#ifdef HAVE_EPOLL
+#ifdef HAVE_SYS_EPOLL_H
     nf = epoll_wait(eh, &ev, 1, 1);
 #else
     nf = poll(&pfd, 1, 1);
@@ -2085,7 +2085,7 @@ void miruo_execute_tcpsession_live()
   }
   gettimeofday(&(opt.ntv), NULL);
   miruo_tcpsession_statistics(1);
-#ifdef HAVE_EPOLL
+#ifdef HAVE_SYS_EPOLL_H
   close(eh);
 #endif
 }
