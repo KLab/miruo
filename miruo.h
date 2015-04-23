@@ -18,7 +18,11 @@
 #include<sys/types.h>
 #include<sys/stat.h>
 #include<sys/socket.h>
+#ifdef HAVE_EPOLL
 #include<sys/epoll.h>
+#else
+#include<poll.h>
+#endif
 #include<netinet/in.h>
 #include<arpa/inet.h>
 #include<pcap.h>

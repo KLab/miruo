@@ -641,7 +641,7 @@ tcpsegment *add_tcpsegment(tcpsession *c, tcpsegment *t)
   tcpsegment *r;
   tcpsegment *p;
   if(c == NULL){
-    return;
+    return(NULL);
   }
   t = malloc_tcpsegment(t);
   if(t == NULL){
@@ -1782,6 +1782,7 @@ int miruo_init()
   opt.color    = isatty(fileno(stdout));
   opt.mode     = MIRUO_MODE_TCP;
   setvbuf(stdout, 0, _IONBF, 0);
+  return 0;
 }
 
 struct option *get_optlist()
@@ -2034,25 +2035,33 @@ void miruo_execute_tcpsession_offline()
 void miruo_execute_tcpsession_live()
 {
   int fd;
-  int eh;
   int nf;
   struct timeval tv;
+#ifdef HAVE_EPOLL
+  int eh;
   struct epoll_event ev;
+#else
+  struct pollfd pfd;
+#endif
 
   fd = pcap_fileno(opt.p);
+#ifdef HAVE_EPOLL
   eh = epoll_create(1);
   if(eh == -1){
     fprintf(stderr, "%s: [error] %s\n", __func__, strerror(errno));
     return;
   }
-  memset(&tv, 0, sizeof(tv));
   memset(&ev, 0, sizeof(ev));
   ev.events = EPOLLIN;
   if(epoll_ctl(eh, EPOLL_CTL_ADD, fd, &ev) == -1){
     fprintf(stderr, "%s: [error] %s\n", __func__, strerror(errno));
     return;
   }
-
+#else
+  pfd.fd = fd;
+  pfd.events = POLLIN;
+#endif
+  memset(&tv, 0, sizeof(tv));
   gettimeofday(&(opt.stv), NULL);
   while(opt.loop){
     if(tv.tv_sec != opt.ntv.tv_sec){
@@ -2060,7 +2069,11 @@ void miruo_execute_tcpsession_live()
       miruo_tcpsession_statistics(0);
       miruo_tcpsession_timeout();
     }
+#ifdef HAVE_EPOLL
     nf = epoll_wait(eh, &ev, 1, 1);
+#else
+    nf = poll(&pfd, 1, 1);
+#endif
     if(nf == 0){
       gettimeofday(&(opt.ntv), NULL);
     }else{
@@ -2072,7 +2085,9 @@ void miruo_execute_tcpsession_live()
   }
   gettimeofday(&(opt.ntv), NULL);
   miruo_tcpsession_statistics(1);
+#ifdef HAVE_EPOLL
   close(eh);
+#endif
 }
 
 void miruo_execute_tcpsession()
