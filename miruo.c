@@ -106,15 +106,38 @@ meminfo *get_memmory()
   int   i;
   int   f;
   char *r;
-  char  buff[256];
+  char  buff[256], cmd[256];
   static meminfo mi;
+  FILE *fp;
 
   memset(buff, 0, sizeof(buff));
   mi.page_size = sysconf(_SC_PAGESIZE);
   f = open("/proc/self/statm", O_RDONLY);
   if(f == -1){
     memset(&mi, 0, sizeof(meminfo));
-    return(NULL);
+    snprintf(cmd, sizeof(cmd), "/bin/ps -o pid=,vsz=,rss= -p %d", getpid());
+    fp = popen(cmd, "r");
+    if(fp == NULL){
+      return(NULL);
+    }
+    fread(buff, 1, sizeof(buff) -1, fp);
+    pclose(fp);
+    i = 1;
+    r = strtok(buff, " ");
+    if(!r || atoi(r) != getpid()){
+      return(NULL);
+    }
+    while(r=strtok(NULL, " ")){
+      switch(++i){
+        case 2:
+          mi.vsz = (uint64_t)atoi(r) * 1024;
+          break;
+        case 3:
+          mi.res = (uint64_t)atoi(r) * 1024;
+          break;
+      }
+    }
+    return(&mi);
   }
   read(f, buff, sizeof(buff) - 1);
   close(f);
