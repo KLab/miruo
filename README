@@ -4,3 +4,233 @@
 /*                                                                        */
 /*                                           Copyright (C) 2011 KLab Inc. */
 /**************************************************************************/
+
+[What is miruo]
+miruo is a packet capture type TCP session monitor.
+miruo can
+- show packets grouped by TCP sessions
+- show only connect-disconnect info in simple & neat style
+- show TCP sessions with which segments were resent
+- show TCP sessions which exceeds certain time.
+- show TCP sessions which were terminated by RST
+- show segments where IP fragmentation occured
+- utilize files saved by tcpdump -w
+- is light & run with high speed 
+
+[Installation]
+  $ tar zxvf miruo-x.y.z.tar.gz
+  $ cd miruo-x.y.z
+  $ ./configure
+  $ make
+  $ sudo make install
+
+* miruo is tested on Linux only.
+
+[Usage]
+usage: miruo [option] [expression]
+  option
+   -h, --help                     # help
+   -V, --version                  # version
+   -i, --interface=dev            # eth0,bond0,any...
+   -v, --view-data=NUM            # 
+   -T, --long-connect=time[ms]    # Threshold of connection time for lookup. Default 0ms(off)
+   -t, --long-delay=time[ms]      # Threshold of long delay time for lookup. Default 0ms(off)
+   -r, --retransmit=time[ms]      # Threshold of retransmit time for lookup. Default 1000ms
+   -s, --stat=interval[sec]       # statistics view interval. Default 0sec(off)
+   -f, --file=file                # read file(for tcpdump -w)
+   -S, --syn=[0|1]                # syn retransmit lookup mode.default=1. 0=ignore 1=lookup
+   -R, --rst=[0|1|2]              # rst lookup mode.default=1. (see README)
+   -F, --fragment=[0|1]           # ip fragmentation lookup. default=1
+   -C, --color=[0|1]              # color 0=off 1=on
+   -L, --session-limit=NUM        # active session limit. Default 1024
+   -l, --segment-limit=NUM        # active segment limit. Default 65536
+   -m, --dpi-mode=mode            # deep packet inspection mode. (now support only http)
+   -q, --quite                    # 
+       --all                      # all session lookup
+       --live                     # live mode(all segment lookup)
+
+On [expression] part, you can set filter with same way as TCPdump.
+However, if you set filter like "tcp[13] & 2 != 0", which filter some parts of TCP packets, you will not be able to track TCP sessions.
+For filter format, please refer to man of tcpdump.
+
+Sample for valid filter)
+ # miruo -T3000 host dbserver and port 3306
+This will show sessions which are connected to MYSQL more than 3 sec. 
+
+Sample for invalid filter)
+ # miruo -T3000 dst host dbserver and dst port 3306
+Since it can not capture SYN/BACK, it can not trace TCP
+
+【Options】
+  
+  -h, --help
+  shows help
+
+  -V, --version
+  shows version info
+
+  -i, --interface=dev
+　specify network interface. "any" is also valid.
+
+  -v, --view-data=NUM
+  when this is 0, it only shows packets that are resent/delayed and packets of connections and disconnections.
+  otherwise specified, it shows other packets depends on the specified number.
+  default is 0.
+
+  -T, --long-connect=time[ms]
+  sessions with connection time (from connected time to disconnected time) more than specified time will be shown.
+  default is 0. Then it shows info regardless of connection time.
+
+  -t, --long-delay=time[ms]
+  shows packets with arrival time more than specified.
+  default is 0. Then it shows info regardless of arrival time.
+
+  -r, --retransmit=time[ms]
+  when 0, resent TCP segments will be ignored.
+  otherwise specified,it shows segments that were resent with more than specified time (milliseconds)
+  default is 1000 (milliseconds)
+
+  -s, --stat=interval[sec]
+  outputs statics periodically to stderr.  
+  default is 0. Then no outputs.
+
+  -f, --file=file
+  Specifies file that is saved with tcpdump -w 
+
+  -S, --syn=[0|1]
+  Detection for resending of SYN or SYN/ACK.
+  0: Detection is invalid
+  1: Detection is valid
+
+  This detection works independently of "r" option.
+  regardless of "r" option, when 1 is specified here, it will detect resending, while it will not detect when 1 is specified.
+
+  -R, --rst=[0|1|2]
+  Detection for sessions which was terminated with RST flag.
+  0: Detection is invalid
+  1: Detection is valid. However it does not detect RST after FIN is sent.
+  2: Detect all RST
+  default is 1
+
+  -F, --flagment=[0|1]
+  Detection for IP fragmentation
+  0: Detection is invalid
+  1: Detection is valid
+  default is 1 
+
+  -C, --color=[0|1]
+   color display will be off when specifid 0.  
+   Default is 1. However it will be 0 when stdout is saved as files or stdout is sent to other commands with pipes.
+   You need to specify 1 when you want color display while using pipes to send info to grep commands.
+
+  -L, --session-limit=NUM
+  Specify concurrent session numbers miruo holds.
+  This option specify the max number of miruo's internal buffer. 
+  It prevents miruo from using too much memories(server resources), unintentionally by user.
+     Default is 1024. If dropSession value of stats is 0, there will be no need to increase this number.
+
+  -l, --segment-limit=NUM
+  Specifies the concurrent number of segments.
+  This option specify the max number of miruo's internal buffer. 
+  It prevents miruo from using too much memories(server resources), unintentioned by a user.
+     Default is 65536. If dropSegment value of stats is 0, there will be no need to increase this number.  
+
+  -m, --dpi-mode=mode
+  If you want to analyze payload of segments to show protocol specific information, specify the mode (protocol name).  
+  http: shows HTTP request response information
+
+  -q, --quite
+　shows simple version of display
+    If you prefer width shorter than 80 characters, you may want to use this option. 
+
+  --all
+  shows all sessions
+
+  --live
+  shows all packets in real time  
+
+[Statics]
+With s option, miruo outputs stats periodically to stderr.
+Detail of each columns are as below.
+
+===== Session Statistics =====
+Captcha Time    : 00:01:03     elapsed time
+Total Sessions  : 0            the number of sessions tracked
+  Lookup        : 0            the number of TCP sessions showed
+    LongConnect : 0            the number of sessions exceeded LongConnectTime
+    LongDelay   : 0            the number of sessions exceeded LongDelayTime
+    Retransmit  : 0            the number of sessions resent
+    Timeout     : 0            the number of sessions timeout
+    Error       : 0            the number of error with unable to track
+    RST         : 0            the number of sessions reset by RST
+    flagment    : 0            the number of sessions with IP fragmented
+------------------------------
+LongConnectTime : 0 [ms]       -T option set value
+LongDelayTime   : 0 [ms]       -t option set value
+RetransmitTime  : 1000 [ms]    -r option set value
+------------------------------
+ActiveSession   : 0            the number of TCP sessions being tracked
+ActiveSessionMax: 0            the max number of TCP sessions tracked concurrently
+ActiveSessionLim: 1024         the max number of TCP sessions can be tracked concurrently( with -L option)
+ActiveSegment   : 0            the number of active TCP segment
+ActiveSegmentMax: 0            the max number of active TCP segments required
+ActiveSegmentLim: 65536        the max number of segments miruo can hold (with -l option) 
+DropSession     : 0            the number of TCP sessions miruo disposed
+DropSegment     : 0            the number of TCP segments miruo disposed
+------------------------------
+CPU   : 0.0%                   CPU usage of miruo
+VSZ   : 6100KB                 size of virtual memory that miruo holds
+RSS   : 2932KB                 size of physical memory that miruo uses
+
+===== libpcap Statistics =====
+recv  : 89                     the number of packets libpcap captured
+drop  : 0                      the number of packets libpcap dropped 
+ifdrop: 0                      the number of packets a interface dropped
+===== Header Error Count =====
+L2    : 0                      the number of times it failed to analyze datalink layer headers
+IP    : 0                      the number of times it failed to analyze IP headers
+TCP   : 0                      the number of times it failed to analyze TCP headers 
+==============================
+
+[Explanation on displayed result]
+-------------------------------------------------------------------------------
+3615             2.196 |  192.168.61.88:38001 == 192.168.56.136:3306  | Total 92 segments, 43278 bytes
+3615:0000 17:57:19.193 |          SYN_SENT >----S-> SYN_RECV          | 5C503355/00000000   74 - <mss=1460, sackOK, timestamp 898447130 0, wscale=7>
+3615:0001 17:57:19.193 |       ESTABLISHED <-A--S-< SYN_RECV          | 6BCBB846/5C503356   74 - <mss=1460, sackOK, timestamp 899636678 898447130, wscale=7>
+3615:0002 17:57:19.193 |       ESTABLISHED >-A----> ESTABLISHED       | 5C503356/6BCBB847   66 - <timestamp 898447130 899636678>
+3615:0003 17:57:19.193 |       ESTABLISHED <-AP---< ESTABLISHED       | 6BCBB847/5C503356  126 - <timestamp 899636678 898447130>
+3615:0004 17:57:19.193 |       ESTABLISHED >-A----> ESTABLISHED       | 5C503356/6BCBB883   66 - <timestamp 898447130 899636678>
+3615:0005 17:57:19.193 |       ESTABLISHED >-AP---> ESTABLISHED       | 5C503356/6BCBB883  150 - <timestamp 898447130 899636678>
+3615:****              |                                              |
+3615:0085 17:57:19.265 |       ESTABLISHED <-A----< ESTABLISHED       | 6BCC1685/5C505E8E 1514 - <timestamp 899636696 898447148>
+3615:0086 17:57:19.265 |       ESTABLISHED <-AP---< ESTABLISHED       | 6BCC1C2D/5C505E8E  687 - <timestamp 899636696 898447148>
+3615:0087 17:57:19.265 |       ESTABLISHED >-A----> ESTABLISHED       | 5C505E8E/6BCC1E9A   66 - <timestamp 898447148 899636696>
+3615:0088 17:57:21.389 |       ESTABLISHED >-AP---> ESTABLISHED       | 5C505E8E/6BCC1E9A   71 - <timestamp 898447679 899636696>
+3615:0089 17:57:21.389 |         FIN_WAIT1 >-A---F> ESTABLISHED       | 5C505E93/6BCC1E9A   66 - <timestamp 898447679 899636696>
+3615:0090 17:57:21.389 |         FIN_WAIT2 <-A---F< LAST_ACK          | 6BCC1E9A/5C505E94   66 - <timestamp 899637227 898447679>
+3615:0091 17:57:21.389 |         TIME_WAIT >-A----> CLOSED            | 5C505E94/6BCC1E9B   66 - <timestamp 898447679 899637227>
+-------------------------------------------------------------------------------
+The number on left "3615" is called "Session ID".
+This value itself does not hold any meanings. Everytime new session is started,  miruo will allocate a new number, incremented internally.
+The next number delimited by a colon is called "Packet ID".
+The first SYN is 0 and it will increase as new packet arrives.
+ "Session ID" and  "Packet ID" are unrelated parameters to TCP or IP protocols, just internally used by miruo.
+So those values do not have any special meanings.
+However, with sample above, it allows you to say,
+"The packet of Session ID 3615, Packet ID 88 seems to take more than 2 sec to arrive"
+It would make it easier to communicate with others on trouble shootings. 
+
+Next is the time of packet capture.
+The first line is session time (from connected time to disconnected time). When it exceeds the time that was set by -T option, it will be displayed.
+
+The center part is self explanatory. 
+
+5C503355/00000000 or 6BCBB846/5C503356 mean sequence number/response number of TCP header.
+
+74 or 66 or 1514 mean packet size.
+On some environments, it may be a value over 1514. This would be due to TOE(TCP Offload Engine), not troubles or bugs.
+
+'-' parts shows 'F' when IP fragmentation occurs. it will not show it so when F option is set to 0.
+
+The last parts, enclosed with <> are TCP header option.
+
