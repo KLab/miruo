@@ -67,6 +67,9 @@
   <dd>ヘルプを表示します。</dd>
   
   <dt>-V, --version</dt>
+  <dd>バージョンを表示します。</dd>
+
+  <dt> -i, --interface=dev</dt>
   <dd>ネットワークインターフェイスを指定します。
   <code>any</code> も指定できます。</dd>
 
