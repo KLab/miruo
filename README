@@ -15,7 +15,7 @@ miruo can
 - show TCP sessions which were terminated by RST
 - show segments where IP fragmentation occured
 - utilize files saved by tcpdump -w
-- is light & run with high speed 
+- is light & run with high speed
 
 [Installation]
   $ tar zxvf miruo-x.y.z.tar.gz
@@ -32,7 +32,7 @@ usage: miruo [option] [expression]
    -h, --help                     # help
    -V, --version                  # version
    -i, --interface=dev            # eth0,bond0,any...
-   -v, --view-data=NUM            # 
+   -v, --view-data=NUM            #
    -T, --long-connect=time[ms]    # Threshold of connection time for lookup. Default 0ms(off)
    -t, --long-delay=time[ms]      # Threshold of long delay time for lookup. Default 0ms(off)
    -r, --retransmit=time[ms]      # Threshold of retransmit time for lookup. Default 1000ms
@@ -45,7 +45,7 @@ usage: miruo [option] [expression]
    -L, --session-limit=NUM        # active session limit. Default 1024
    -l, --segment-limit=NUM        # active segment limit. Default 65536
    -m, --dpi-mode=mode            # deep packet inspection mode. (now support only http)
-   -q, --quite                    # 
+   -q, --quite                    #
        --all                      # all session lookup
        --live                     # live mode(all segment lookup)
 
@@ -55,14 +55,14 @@ For filter format, please refer to man of tcpdump.
 
 Sample for valid filter)
  # miruo -T3000 host dbserver and port 3306
-This will show sessions which are connected to MYSQL more than 3 sec. 
+This will show sessions which are connected to MYSQL more than 3 sec.
 
 Sample for invalid filter)
  # miruo -T3000 dst host dbserver and dst port 3306
 Since it can not capture SYN/BACK, it can not trace TCP
 
 【Options】
-  
+
   -h, --help
   shows help
 
@@ -70,7 +70,7 @@ Since it can not capture SYN/BACK, it can not trace TCP
   shows version info
 
   -i, --interface=dev
-　specify network interface. "any" is also valid.
+  specify network interface. "any" is also valid.
 
   -v, --view-data=NUM
   when this is 0, it only shows packets that are resent/delayed and packets of connections and disconnections.
@@ -91,11 +91,11 @@ Since it can not capture SYN/BACK, it can not trace TCP
   default is 1000 (milliseconds)
 
   -s, --stat=interval[sec]
-  outputs statics periodically to stderr.  
+  outputs statics periodically to stderr.
   default is 0. Then no outputs.
 
   -f, --file=file
-  Specifies file that is saved with tcpdump -w 
+  Specifies file that is saved with tcpdump -w
 
   -S, --syn=[0|1]
   Detection for resending of SYN or SYN/ACK.
@@ -116,38 +116,38 @@ Since it can not capture SYN/BACK, it can not trace TCP
   Detection for IP fragmentation
   0: Detection is invalid
   1: Detection is valid
-  default is 1 
+  default is 1
 
   -C, --color=[0|1]
-   color display will be off when specifid 0.  
+   color display will be off when specifid 0.
    Default is 1. However it will be 0 when stdout is saved as files or stdout is sent to other commands with pipes.
    You need to specify 1 when you want color display while using pipes to send info to grep commands.
 
   -L, --session-limit=NUM
   Specify concurrent session numbers miruo holds.
-  This option specify the max number of miruo's internal buffer. 
+  This option specify the max number of miruo's internal buffer.
   It prevents miruo from using too much memories(server resources), unintentionally by user.
      Default is 1024. If dropSession value of stats is 0, there will be no need to increase this number.
 
   -l, --segment-limit=NUM
   Specifies the concurrent number of segments.
-  This option specify the max number of miruo's internal buffer. 
+  This option specify the max number of miruo's internal buffer.
   It prevents miruo from using too much memories(server resources), unintentioned by a user.
-     Default is 65536. If dropSegment value of stats is 0, there will be no need to increase this number.  
+     Default is 65536. If dropSegment value of stats is 0, there will be no need to increase this number.
 
   -m, --dpi-mode=mode
-  If you want to analyze payload of segments to show protocol specific information, specify the mode (protocol name).  
+  If you want to analyze payload of segments to show protocol specific information, specify the mode (protocol name).
   http: shows HTTP request response information
 
   -q, --quite
-　shows simple version of display
-    If you prefer width shorter than 80 characters, you may want to use this option. 
+  shows simple version of display
+    If you prefer width shorter than 80 characters, you may want to use this option.
 
   --all
   shows all sessions
 
   --live
-  shows all packets in real time  
+  shows all packets in real time
 
 [Statics]
 With s option, miruo outputs stats periodically to stderr.
@@ -174,7 +174,7 @@ ActiveSessionMax: 0            the max number of TCP sessions tracked concurrent
 ActiveSessionLim: 1024         the max number of TCP sessions can be tracked concurrently( with -L option)
 ActiveSegment   : 0            the number of active TCP segment
 ActiveSegmentMax: 0            the max number of active TCP segments required
-ActiveSegmentLim: 65536        the max number of segments miruo can hold (with -l option) 
+ActiveSegmentLim: 65536        the max number of segments miruo can hold (with -l option)
 DropSession     : 0            the number of TCP sessions miruo disposed
 DropSegment     : 0            the number of TCP segments miruo disposed
 ------------------------------
@@ -184,12 +184,12 @@ RSS   : 2932KB                 size of physical memory that miruo uses
 
 ===== libpcap Statistics =====
 recv  : 89                     the number of packets libpcap captured
-drop  : 0                      the number of packets libpcap dropped 
+drop  : 0                      the number of packets libpcap dropped
 ifdrop: 0                      the number of packets a interface dropped
 ===== Header Error Count =====
 L2    : 0                      the number of times it failed to analyze datalink layer headers
 IP    : 0                      the number of times it failed to analyze IP headers
-TCP   : 0                      the number of times it failed to analyze TCP headers 
+TCP   : 0                      the number of times it failed to analyze TCP headers
 ==============================
 
 [Explanation on displayed result]
@@ -218,12 +218,12 @@ The first SYN is 0 and it will increase as new packet arrives.
 So those values do not have any special meanings.
 However, with sample above, it allows you to say,
 "The packet of Session ID 3615, Packet ID 88 seems to take more than 2 sec to arrive"
-It would make it easier to communicate with others on trouble shootings. 
+It would make it easier to communicate with others on trouble shootings.
 
 Next is the time of packet capture.
 The first line is session time (from connected time to disconnected time). When it exceeds the time that was set by -T option, it will be displayed.
 
-The center part is self explanatory. 
+The center part is self explanatory.
 
 5C503355/00000000 or 6BCBB846/5C503356 mean sequence number/response number of TCP header.
 

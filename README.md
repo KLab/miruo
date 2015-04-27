@@ -22,12 +22,12 @@
 # 使い方
 
     usage: miruo [option] [expression]
-    
+
     option
       -h, --help                     # help
       -V, --version                  # version
       -i, --interface=dev            # eth0,bond0,any...
-      -v, --view-data=NUM            # 
+      -v, --view-data=NUM            #
       -T, --long-connect=time[ms]    # Threshold of connection time for lookup. Default 0ms(off)
       -t, --long-delay=time[ms]      # Threshold of long delay time for lookup. Default 0ms(off)
       -r, --retransmit=time[ms]      # Threshold of retransmit time for lookup. Default 1000ms
@@ -40,12 +40,12 @@
       -L, --session-limit=NUM        # active session limit. Default 1024
       -l, --segment-limit=NUM        # active segment limit. Default 65536
       -m, --dpi-mode=mode            # deep packet inspection mode. (now support only http)
-      -q, --qiute                    # 
+      -q, --qiute                    #
           --all                      # all session lookup
           --live                     # live mode(all segment lookup)
 
-`expression` には tcpdump と同じ書式でフィルタを記述できます。 
-  
+`expression` には tcpdump と同じ書式でフィルタを記述できます。
+
 ただし、`tcp[13] & 2 != 0` などのような、TCP の一部のパケットのみを抽出するルールを書いてしまうと、TCP セッションを追跡できなくなるので注意してください。フィルタの書式については tcpdump の man を参照してください。
 
 **良い例**
@@ -59,13 +59,13 @@
     # miruo -T3000 dst host dbserver and dst port 3306
 
   *SYN/ACK などをキャプチャできないので TCP を追跡できなくなります*
-  
+
 ## オプションの詳細
 
 <dl>
   <dt>-h, --help</dt>
   <dd>ヘルプを表示します。</dd>
-  
+
   <dt>-V, --version</dt>
   <dd>バージョンを表示します。</dd>
 
@@ -90,14 +90,14 @@
   <dd><code>0</code> を指定すると、再送されたTCPセグメントを無視します。
   <code>0</code> 以外の値を指定すると、指定された時間（ミリ秒単位）以上の時間をかけて再送されたセグメントを表示します。
   デフォルトは <code>1000</code>（ミリ秒）です。</dd>
-  
+
   <dt>-s, --stat=interval[sec]</dt>
   <dd>定期的にstderrへ統計情報を出力します。
   デフォルト値は <code>0</code> で、統計情報を表示しません。</dd>
-  
+
   <dt>-f, --file=file</dt>
   <dd><code>tcpdump -w</code> で保存したファイルを利用したい時にファイル名を指定してください。</dd>
-  
+
   <dt>-S, --syn=[0|1]</dt>
   <dd>
     SYN もしくは SYN/ACK の再送を検出するかどうかを指定します。<br/>
@@ -108,7 +108,7 @@
     SYN と SYN/ACK の再送検出は、<code>-r</code> オプションとは独立して処理されます。
     <code>-r</code> オプションの指定内容に関わらず、ここで <code>1</code> を指定すると再送を検出しますし、<code>0</code> を指定すると検出しなくなります。
   </dd>
-  
+
   <dt>-R, --rst=[0|1|2]</dt>
   <dd>
     RST フラグで中断されたセッションを検出するかどうかを指定します。<br/>
@@ -119,7 +119,7 @@
     </ul>
     デフォルト値は <code>1</code> です。
   </dd>
-  
+
   <dt>-F, --flagment=[0|1]</dt>
   <dd>
     IP フラグメントを検出するかどうか指定します。<br/>
@@ -129,22 +129,22 @@
     </ul>
     デフォルト値は <code>1</code> です。
   </dd>
-  
+
   <dt>-C, --color=[0|1]</dt>
-  <dd>カラー表示をしたくない場合は <code>0</code> を指定してください。 
+  <dd>カラー表示をしたくない場合は <code>0</code> を指定してください。
   デフォルトは <code>1</code> ですが、標準出力をファイルに落とす場合や、パイプで他のコマンドに渡す場合は <code>0</code> になります。
   パイプで grep などに渡したいけど、カラー表示をしたいような時には明示的に <code>1</code> を指定してください</dd>
-  
+
   <dt>-L, --session-limit=NUM</dt>
   <dd>同時に保持できるセッション数を指定します。
-　これは、miruo の内部バッファの最大値を指定するオプションで、意図せずに大量のメモリ（サーバリソース）を使い過ぎないように制限するためのものです。
+  これは、miruo の内部バッファの最大値を指定するオプションで、意図せずに大量のメモリ（サーバリソース）を使い過ぎないように制限するためのものです。
   デフォルト値は <code>1024</code> ですが、統計情報（後述）の <code>DropSession</code> の項目が <code>0</code> ならば増やす必要はないでしょう。</dd>
-  
+
   <dt>-l, --segment-limit=NUM</dt>
   <dd>同時に保持できるセグメント数を指定します。
-　これは、miruo の内部バッファの最大値を指定するオプションで、意図せずに大量のメモリ（サーバリソース）を使い過ぎないように制限するためのものです。
+  これは、miruo の内部バッファの最大値を指定するオプションで、意図せずに大量のメモリ（サーバリソース）を使い過ぎないように制限するためのものです。
   デフォルト値は <code>65536</code> ですが、統計情報（後述）の <code>DropSegment</code> の項目が <code>0</code> ならば増やす必要はないでしょう。</dd>
-  
+
   <dt>-m, --dpi-mode=mode</dt>
   <dd>
     TCP セグメントのペイロードを解析してプロトコル固有の情報を表示したい場合は以下のモード（プロトコル名）を指定します。<br/>
@@ -152,21 +152,21 @@
       <li><strong>http:</strong> HTTPリクエスト・レスポンスの情報を表示します</li>
     </ul>
   </dd>
-  
+
   <dt>-q, --qiute</dt>
   <dd>シンプルな表示になります。
   横幅が <code>80</code> 文字以内じゃないと我慢出来ない場合に指定するとよいかもです。</dd>
-  
+
   <dt>--all</dt>
   <dd>すべてのセッションを表示します。</dd>
-  
+
   <dt>--live</dt>
   <dd>すべてのパケットをリアルタイムに表示します。</dd>
 </dl>
 
 ## 統計情報
 
-`-s` オプションを指定すると、定期的に `stderr` へ統計情報を出力するようになります。  
+`-s` オプションを指定すると、定期的に `stderr` へ統計情報を出力するようになります。
 各項目の意味は以下のとおりです。
 
     ===== Session Statistics =====
@@ -234,14 +234,14 @@
 
 などと表現できるので、問題点を他の人と共有する際に便利だと思います。
 
-次に表示しているのはパケットをキャプチャした時刻です。  
+次に表示しているのはパケットをキャプチャした時刻です。
 先頭の行は接続時間（接続から切断までの経過時間）を表しており、この時間が `-T` オプションで指定した値を超えたセッションが表示されます。
 
 中央の広い部分は、見ての通りなので説明は割愛します(^^;
 
 `5C503355/00000000` や `6BCBB846/5C503356` はTCPヘッダのシーケンス番号/応答番号です。
 
-74 とか 66 とか 1514 の数値はパケットサイズです。  
+74 とか 66 とか 1514 の数値はパケットサイズです。
 環境によっては 1514 以上の値が表示される場合があるかもしれませんが、それはきっと、故障でもバグでもなく、`TOE（TCP Offload Engine）` の影響だと思います。
 
 `-` と表示されている部分には、IP のフラグメントが発生している場合に `F` と表示されるようになります。`-F` オプションに <code>0</code> を指定すると、この項目は表示されません。
