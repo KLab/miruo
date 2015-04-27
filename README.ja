@@ -34,7 +34,7 @@ usage: miruo [option] [expression]
    -h, --help                     # help
    -V, --version                  # version
    -i, --interface=dev            # eth0,bond0,any...
-   -v, --view-data=NUM            # 
+   -v, --view-data=NUM            #
    -T, --long-connect=time[ms]    # Threshold of connection time for lookup. Default 0ms(off)
    -t, --long-delay=time[ms]      # Threshold of long delay time for lookup. Default 0ms(off)
    -r, --retransmit=time[ms]      # Threshold of retransmit time for lookup. Default 1000ms
@@ -47,7 +47,7 @@ usage: miruo [option] [expression]
    -L, --session-limit=NUM        # active session limit. Default 1024
    -l, --segment-limit=NUM        # active segment limit. Default 65536
    -m, --dpi-mode=mode            # deep packet inspection mode. (now support only http)
-   -q, --qiute                    # 
+   -q, --qiute                    #
        --all                      # all session lookup
        --live                     # live mode(all segment lookup)
 
@@ -66,7 +66,7 @@ expressionにはTCPダンプと同じ書式でフィルタを記述できます�
 
 
 【オプションの詳細】
-  
+
   -h, --help
   ヘルプを表示します。
 
@@ -74,7 +74,7 @@ expressionにはTCPダンプと同じ書式でフィルタを記述できます�
   バージョンを表示します。
 
   -i, --interface=dev
-　ネットワークインターフェイスを指定します。
+  ネットワークインターフェイスを指定します。
   anyも指定できます。
 
   -v, --view-data=NUM
@@ -108,7 +108,7 @@ expressionにはTCPダンプと同じ書式でフィルタを記述できます�
   1: 検出します
   SYNとSYN/ACKの再送検出は、rオプションとは独立して処理されます。
   rオプションの指定内容に関わらず、ここで1を指定すると再送を検出しますし、0を指
-　定すると検出しなくなります。
+  定すると検出しなくなります。
 
   -R, --rst=[0|1|2]
   RSTフラグで中断されたセッションを検出するかどうかを指定します。
@@ -118,28 +118,28 @@ expressionにはTCPダンプと同じ書式でフィルタを記述できます�
   デフォルト値は1です。
 
   -F, --flagment=[0|1]
-  IPフラグメントを検出するかどうか指定します。 
+  IPフラグメントを検出するかどうか指定します。
   0: 検出しません。
   1: 検出します。
-  デフォルト値は1です。 
+  デフォルト値は1です。
 
   -C, --color=[0|1]
-  カラー表示をしたくない場合は0を指定してください。 
+  カラー表示をしたくない場合は0を指定してください。
   デフォルトは1ですが、標準出力をファイルに落とす場合や、パイプで他のコマンドに
   渡す場合は0になります。パイプでgrepなどに渡したいけど、カラー表示をしたいよう
   な時には明示的に1を指定してください
 
   -L, --session-limit=NUM
   同時に保持できるセッション数を指定します。
-　これは、miruoの内部バッファの最大値を指定するオプションで、意図せずに大量のメ
-　モリ（サーバリソース）を使い過ぎないように制限するためのものです。
+  これは、miruoの内部バッファの最大値を指定するオプションで、意図せずに大量のメ
+  モリ（サーバリソース）を使い過ぎないように制限するためのものです。
   デフォルト値は1024ですが、統計情報(後述)の DropSessionの項目が0ならば増やす必
   要はないでしょう。
 
   -l, --segment-limit=NUM
   同時に保持できるセグメント数を指定します。
-　これは、miruoの内部バッファの最大値を指定するオプションで、意図せずに大量のメ
-　モリ（サーバリソース）を使い過ぎないように制限するためのものです。
+  これは、miruoの内部バッファの最大値を指定するオプションで、意図せずに大量のメ
+  モリ（サーバリソース）を使い過ぎないように制限するためのものです。
   デフォルト値は65536ですが、統計情報(後述)の DropSegment の項目が0ならば増やす
   必要はないでしょう。
 
