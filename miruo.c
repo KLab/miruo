@@ -484,11 +484,16 @@ uint8_t *read_header_l2(l2hdr *h, uint8_t *p, uint32_t *l){
 uint8_t *read_header_ip(iphdr *h, uint8_t *p, uint32_t *l)
 {
   int optlen;
-  iphdraw *hr = (iphdraw *)(p = read_header_l2(&(h->l2), p, l));
+  iphdraw *hr;
+  if(opt.lktype == DLT_RAW) {
+    hr = (iphdraw *)p;
+  } else {
+    hr = (iphdraw *)(p = read_header_l2(&(h->l2), p, l));
+  }
   if(hr == NULL){
     return(NULL);
   }
-  if(get_l3type(&(h->l2)) != 0x0800){
+  if(opt.lktype != DLT_RAW && get_l3type(&(h->l2)) != 0x0800){
     return(NULL); // IP以外は破棄
   }
   if(*l < sizeof(iphdraw)){
@@ -2038,6 +2043,7 @@ void miruo_init_pcap()
   switch(opt.lktype){
     case DLT_EN10MB:
     case DLT_LINUX_SLL:
+    case DLT_RAW:
       break;
     default:
       fprintf(stderr, "%s: not support datalink %s(%s)\n", __func__, opt.lkname, opt.lkdesc);
