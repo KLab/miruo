@@ -471,8 +471,8 @@ uint8_t *read_header_sll(sllhdr *h, uint8_t *p, uint32_t *l)
   return(p);
 }
 
-uint8_t *read_header_l2(l2hdr *h, uint8_t *p, uint32_t *l){
-  switch(opt.lktype){
+uint8_t *read_header_l2(l2hdr *h, int lktype, uint8_t *p, uint32_t *l){
+  switch(lktype){
     case DLT_EN10MB:
       return read_header_eth(&(h->hdr.eth), p, l);
     case DLT_LINUX_SLL:
@@ -481,20 +481,80 @@ uint8_t *read_header_l2(l2hdr *h, uint8_t *p, uint32_t *l){
   return(NULL);
 }
 
+#ifdef __APPLE__
+#include <net/if.h>
+#include <sys/param.h>
+#define PKTAP_IFXNAMESIZE (IF_NAMESIZE + 8)
+/*
+ * Header for DLT_PKTAP
+ *
+ * In theory, there could be several types of blocks in a chain before the actual packet
+ */
+struct pktap_header {
+    uint32_t    pth_length;             /* length of this header */
+    uint32_t    pth_type_next;          /* type of data following */
+    uint32_t    pth_dlt;                /* DLT of packet */
+    char        pth_ifname[PKTAP_IFXNAMESIZE];  /* interface name */
+    uint32_t    pth_flags;              /* flags */
+    uint32_t    pth_protocol_family;
+    uint32_t    pth_frame_pre_length;
+    uint32_t    pth_frame_post_length;
+    pid_t       pth_pid;                /* process ID */
+    char        pth_comm[MAXCOMLEN+1];  /* process command name */
+    uint32_t    pth_svc;                /* service class */
+    uint16_t    pth_iftype;
+    uint16_t    pth_ifunit;
+    pid_t       pth_epid;       /* effective process ID */
+    char        pth_ecomm[MAXCOMLEN+1]; /* effective command name */
+};
+#endif
+
 uint8_t *read_header_ip(iphdr *h, uint8_t *p, uint32_t *l)
 {
   int optlen;
   iphdraw *hr;
-  if(opt.lktype == DLT_RAW) {
-    hr = (iphdraw *)p;
-  } else {
-    hr = (iphdraw *)(p = read_header_l2(&(h->l2), p, l));
+  int lktype;
+  lktype = opt.lktype;
+#ifdef __APPLE__
+  if(lktype == DLT_PKTAP){ // Apple PKTAP
+    struct pktap_header *pth;
+    pth = (struct pktap_header *)p;
+    p  += pth->pth_length;
+    *l -= pth->pth_length;
+    lktype = pth->pth_dlt;
+    if(pth->pth_protocol_family != PF_INET){
+      return(NULL);
+    }
   }
-  if(hr == NULL){
-    return(NULL);
-  }
-  if(opt.lktype != DLT_RAW && get_l3type(&(h->l2)) != 0x0800){
-    return(NULL); // IP以外は破棄
+#endif
+  switch(lktype){
+    case DLT_RAW:  // RAW IP
+      hr = (iphdraw *)p;
+      break;
+    case DLT_NULL: // BSD Loopback
+      if(*((uint32_t *)p) != PF_INET){
+        return(NULL);
+      }
+      p  += 4;
+      *l -= 4;
+      hr = (iphdraw *)p;
+      break;
+    case DLT_LOOP: // OpenBSD Loopback
+      if(*((uint32_t *)p) != htonl(PF_INET)){
+        return(NULL);
+      }
+      p  += 4;
+      *l -= 4;
+      hr = (iphdraw *)p;
+      break;
+    default: // Ethernet or Linux SLL
+      hr = (iphdraw *)(p = read_header_l2(&(h->l2), lktype, p, l));
+      if(hr == NULL){
+        return(NULL);
+      }
+      if(get_l3type(&(h->l2)) != 0x0800){
+        return(NULL); // IP以外は破棄
+      }
   }
   if(*l < sizeof(iphdraw)){
     opt.err_ip++;
@@ -2044,6 +2104,9 @@ void miruo_init_pcap()
     case DLT_EN10MB:
     case DLT_LINUX_SLL:
     case DLT_RAW:
+    case DLT_PKTAP:
+    case DLT_NULL:
+    case DLT_LOOP:
       break;
     default:
       fprintf(stderr, "%s: not support datalink %s(%s)\n", __func__, opt.lkname, opt.lkdesc);
