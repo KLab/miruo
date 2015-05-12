@@ -531,6 +531,14 @@ uint8_t *read_header_ip(iphdr *h, uint8_t *p, uint32_t *l)
     case DLT_RAW:  // RAW IP
       hr = (iphdraw *)p;
       break;
+    case DLT_NULL: // BSD Loopback
+      if(*((uint32_t *)p) != PF_INET){
+        return(NULL);
+      }
+      p  += 4;
+      *l -= 4;
+      hr = (iphdraw *)p;
+      break;
     default: // Ethernet or Linux SLL
       hr = (iphdraw *)(p = read_header_l2(&(h->l2), lktype, p, l));
       if(hr == NULL){
@@ -2089,6 +2097,7 @@ void miruo_init_pcap()
     case DLT_LINUX_SLL:
     case DLT_RAW:
     case DLT_PKTAP:
+    case DLT_NULL:
       break;
     default:
       fprintf(stderr, "%s: not support datalink %s(%s)\n", __func__, opt.lkname, opt.lkdesc);
