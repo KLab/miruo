@@ -1,5 +1,8 @@
 2015/05/12: Ver 0.9.6
-- add support iphone rvi interface
+- add support DLT_RAW (RAW IP)
+- add support DLT_PKTAP (Apple Packet TAP)
+- add support DLT_NULL (BSD Loopback)
+- add support DLT_LOOP (OpenBSD Loopback)
 
 2015/04/24: Ver 0.9.5
 - add english readme
@@ -7,4 +10,4 @@
 - BSD Support
 
 2011/07/06: Ver 0.9.1
- - initial release
+- initial release
