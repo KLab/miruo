@@ -2104,7 +2104,9 @@ void miruo_init_pcap()
     case DLT_EN10MB:
     case DLT_LINUX_SLL:
     case DLT_RAW:
+#ifdef __APPLE__
     case DLT_PKTAP:
+#endif
     case DLT_NULL:
     case DLT_LOOP:
       break;
