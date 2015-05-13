@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/KLab/miruo.svg?branch=master)](https://travis-ci.org/KLab/miruo)
+
 # はじめに
   miruo はパケットキャプチャ型の TCP セッションモニタです。
   以下のような特徴があります。
