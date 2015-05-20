@@ -481,7 +481,7 @@ uint8_t *read_header_l2(l2hdr *h, int lktype, uint8_t *p, uint32_t *l){
   return(NULL);
 }
 
-#ifdef __APPLE__
+#if defined(__APPLE__) && defined(DLT_PKTAP)
 #include <net/if.h>
 #include <sys/param.h>
 #define PKTAP_IFXNAMESIZE (IF_NAMESIZE + 8)
@@ -515,7 +515,7 @@ uint8_t *read_header_ip(iphdr *h, uint8_t *p, uint32_t *l)
   iphdraw *hr;
   int lktype;
   lktype = opt.lktype;
-#ifdef __APPLE__
+#if defined(__APPLE__) && defined(DLT_PKTAP)
   if(lktype == DLT_PKTAP){ // Apple PKTAP
     struct pktap_header *pth;
     pth = (struct pktap_header *)p;
@@ -2104,7 +2104,7 @@ void miruo_init_pcap()
     case DLT_EN10MB:
     case DLT_LINUX_SLL:
     case DLT_RAW:
-#ifdef __APPLE__
+#if defined(__APPLE__) && defined(DLT_PKTAP)
     case DLT_PKTAP:
 #endif
     case DLT_NULL:
