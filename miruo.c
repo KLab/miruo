@@ -27,7 +27,7 @@ void usage()
   printf("   -f, --file=file                # read file(for tcpdump -w)\n");
   printf("   -S, --syn=[0|1]                # syn retransmit lookup mode.default=1. 0=ignore 1=lookup\n");
   printf("   -R, --rst=[0|1|2]              # rst lookup mode.default=1. (see README)\n");
-  printf("   -F, --flagment=[0|1]           # ip flagment lookup. default=1\n");
+  printf("   -F, --fragment=[0|1]           # ip fragment lookup. default=1\n");
   printf("   -C, --color=[0|1]              # color 0=off 1=on\n");
   printf("   -L, --session-limit=NUM        # active session limit. Default 1024\n");
   printf("   -l, --segment-limit=NUM        # active segment limit. Default 65536\n");
@@ -746,11 +746,11 @@ tcpsegment *add_tcpsegment(tcpsession *c, tcpsegment *t)
   t->st[0] = c->st[t->sno];
   t->st[1] = c->st[t->rno];
 
-  if(opt.flagment && (t->flagment & 1)){
+  if(opt.fragment && (t->fragment & 1)){
     c->view  = 1;
     t->view  = 0;
     t->color = COLOR_RED;
-    opt.count_ip_flagment++;
+    opt.count_ip_fragment++;
   }
   if((opt.st_limit > 0) && ((get_keika_time(&(p->ts), &(t->ts)) / 1000) > opt.st_limit)){
     c->view  = 1;
@@ -1028,8 +1028,8 @@ void print_tcpsession(FILE *fp, tcpsession *c)
     }
     t = localtime(&(sg->ts.tv_sec));
     sprintf(ts, "%02d:%02d:%02d.%03u", t->tm_hour, t->tm_min, t->tm_sec, sg->ts.tv_usec / 1000);
-    if(opt.flagment){
-      if((sg->flagment & 1) != 0){
+    if(opt.fragment){
+      if((sg->fragment & 1) != 0){
         sprintf(fs, "F");
       }else{
         sprintf(fs, "-");
@@ -1135,7 +1135,7 @@ void miruo_tcpsession_statistics(int view)
   fprintf(stderr, "    Timeout     : %llu\n", opt.count_ts_timeout);
   fprintf(stderr, "    Error       : %llu\n", opt.count_ts_error);
   fprintf(stderr, "    RST         : %llu\n", opt.count_rstbreak + opt.count_rstclose);
-  fprintf(stderr, "    flagment    : %llu\n", opt.count_ip_flagment);
+  fprintf(stderr, "    fragment    : %llu\n", opt.count_ip_fragment);
   fprintf(stderr, "------------------------------\n");
   fprintf(stderr, "LongConnectTime : %d [ms]\n", opt.ct_limit);
   fprintf(stderr, "LongDelayTime   : %d [ms]\n", opt.st_limit);
@@ -1604,7 +1604,7 @@ tcpsession *read_tcpsession(tcpsession *c, const struct pcap_pkthdr *ph, const u
   c->ip[1].sin_port   = th.dport;
   segment->segsz      = ph->len;
   segment->flags      = th.flags;
-  segment->flagment   = th.ip.flags;
+  segment->fragment   = th.ip.flags;
   segment->seqno      = th.seqno;
   segment->ackno      = th.ackno;
   segment->optsize    = th.offset - 20;
@@ -1857,7 +1857,7 @@ int miruo_init()
   opt.quite    = 0;
   opt.promisc  = 1;
   opt.viewdata = 0;
-  opt.flagment = 1;
+  opt.fragment = 1;
   opt.rsynfind = 1;
   opt.rstmode  = 1;
   opt.stattime = 0;
@@ -1881,6 +1881,7 @@ struct option *get_optlist()
       "all",             0, NULL, 500,
       "live",            0, NULL, 501,
       "quite",           0, NULL, 'q',
+      "fragment",        1, NULL, 'F',
       "flagment",        1, NULL, 'F',
       "color",           1, NULL, 'C',
       "syn",             1, NULL, 'S',
@@ -1925,7 +1926,7 @@ void miruo_setopt(int argc, char *argv[])
         break;
       case 'F':
         if(is_numeric(optarg)){
-          opt.flagment = atoi(optarg);
+          opt.fragment = atoi(optarg);
         }else{
           usage();
           miruo_finish(1);

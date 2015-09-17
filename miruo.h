@@ -144,7 +144,7 @@ typedef struct tcpsegment
   uint8_t  rno;            //
   uint8_t  st[2];          // ステータス
   uint8_t  flags;          // TCPフラグ
-  uint8_t  flagment;       // IPフラグメントの状態
+  uint8_t  fragment;       // IPフラグメントの状態
   uint16_t segsz;          // セグメントサイズ
   uint16_t segno;          // セグメント番号
   uint32_t seqno;          // シーケンス番号
@@ -222,7 +222,7 @@ typedef struct miruopt
   int  pksize;                // キャプチャサイズ
   int  promisc;               // NICをpromiscにするか
   int  rstmode;               // Rオプションの数
-  int  flagment;              // IPのフラグメントを検出するかどうか
+  int  fragment;              // IPのフラグメントを検出するかどうか
   int  viewdata;              // ついでに表示しとくデータの数
   int  rsynfind;              // SYNの再送を必ず検出するフラグ
   int  stattime;              // 統計情報を表示する間隔
@@ -253,7 +253,7 @@ typedef struct miruopt
   uint64_t count_sg_delay;    // 
   uint64_t count_sg_drop;     // TCPセグメントを保持できなかった数
   uint64_t count_sg_retrans;  // 再送回数
-  uint64_t count_ip_flagment; //
+  uint64_t count_ip_fragment; //
   uint64_t count_rstbreak;    //
   uint64_t count_rstclose;    //
   tcpsession *tsact;          //

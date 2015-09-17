@@ -37,7 +37,7 @@
       -f, --file=file                # read file(for tcpdump -w)
       -S, --syn=[0|1]                # syn retransmit lookup mode.default=1. 0=ignore 1=lookup
       -R, --rst=[0|1|2]              # rst lookup mode.default=1. (see README)
-      -F, --flagment=[0|1]           # ip flagment lookup. default=1
+      -F, --fragment=[0|1]           # ip fragment lookup. default=1
       -C, --color=[0|1]              # color 0=off 1=on
       -L, --session-limit=NUM        # active session limit. Default 1024
       -l, --segment-limit=NUM        # active segment limit. Default 65536
@@ -122,7 +122,7 @@
     デフォルト値は <code>1</code> です。
   </dd>
 
-  <dt>-F, --flagment=[0|1]</dt>
+  <dt>-F, --fragment=[0|1]</dt>
   <dd>
     IP フラグメントを検出するかどうか指定します。<br/>
     <ul>
@@ -181,7 +181,7 @@
         Timeout     : 0            タイムアウトしたセッションの数
         Error       : 0            追跡しきれなくてエラーになった数
         RST         : 0            RSTでリセットされたセッションの数
-        flagment    : 0            IPフラグメントされたセッションの数
+        fragment    : 0            IPフラグメントされたセッションの数
     ------------------------------
     LongConnectTime : 0 [ms]       -Tオプションの設定値
     LongDelayTime   : 0 [ms]       -tオプションの設定値

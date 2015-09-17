@@ -112,7 +112,7 @@ Since it can not capture SYN/BACK, it can not trace TCP
   2: Detect all RST
   default is 1
 
-  -F, --flagment=[0|1]
+  -F, --fragment=[0|1]
   Detection for IP fragmentation
   0: Detection is invalid
   1: Detection is valid
@@ -163,7 +163,7 @@ Total Sessions  : 0            the number of sessions tracked
     Timeout     : 0            the number of sessions timeout
     Error       : 0            the number of error with unable to track
     RST         : 0            the number of sessions reset by RST
-    flagment    : 0            the number of sessions with IP fragmented
+    fragment    : 0            the number of sessions with IP fragmented
 ------------------------------
 LongConnectTime : 0 [ms]       -T option set value
 LongDelayTime   : 0 [ms]       -t option set value
