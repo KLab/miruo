@@ -32,7 +32,7 @@ void usage()
   printf("   -L, --session-limit=NUM        # active session limit. Default 1024\n");
   printf("   -l, --segment-limit=NUM        # active segment limit. Default 65536\n");
   printf("   -m, --dpi-mode=mode            # deep packet inspection mode. (now support only http)\n");
-  printf("   -q, --qiute                    # \n");
+  printf("   -q, --quiet                    # \n");
   printf("       --all                      # all session lookup\n");
   printf("       --live                     # live mode(all segment lookup)\n");
   printf("\n");
@@ -995,7 +995,7 @@ void print_tcpsession(FILE *fp, tcpsession *c)
     uint32_t ct = tcp_connection_time(c);
     sprintf(ip[0], "%s:%u", inet_ntoa(c->ip[0].sin_addr), c->ip[0].sin_port);
     sprintf(ip[1], "%s:%u", inet_ntoa(c->ip[1].sin_addr), c->ip[1].sin_port);
-    if(opt.quite){
+    if(opt.quiet){
       fprintf(fp, "%s%8u.%03u|%21s == %-21s|%useg(%u)%s\n",
         cl[0],
           ct / 1000,
@@ -1036,7 +1036,7 @@ void print_tcpsession(FILE *fp, tcpsession *c)
       }
     }
     if(opt.live == 0){
-      if(opt.quite){
+      if(opt.quiet){
         fprintf(fp, "%s%s|%18s %s%s%s %-18s|%08X/%08X%s\n",
           cl[0], 
             ts, 
@@ -1200,7 +1200,7 @@ tcpsession *miruo_tcpsession_destroy(tcpsession *c, int view, char *msg, char *r
     if(opt.live){
       fprintf(stdout, "%s%04u:%04u %s %s (%s)%s\n", sc[0], c->sid, c->pkcnt, ts, msg, reason, sc[1]);
     }else{
-      if(opt.quite){
+      if(opt.quiet){
         fprintf(stdout, "%s%s|%s%s%s|%s%s\n", sc[0], ts, sl, msg, sr, reason, sc[1]);
       }else{
         fprintf(stdout, "%s%04u:%04u %s |%s%s%s| %s%s\n", sc[0], c->sid, c->pkcnt, ts, sl, msg, sr, reason, sc[1]);
@@ -1314,10 +1314,10 @@ tcpsession *miruo_tcpsession_connect(tcpsession *c, tcpsession *s, int *connect)
       return(c);
     }
     opt.count_ts_error++;
-    miruo_tcpsession_destroy(c, (opt.quite < 2), "error break", "Duplicate connection(packet loss?)");
+    miruo_tcpsession_destroy(c, (opt.quiet < 2), "error break", "Duplicate connection(packet loss?)");
     if(c = add_tcpsession(s)){
       *connect = 1;
-      if(opt.quite < 1){
+      if(opt.quiet < 1){
         c->segment.color = COLOR_RED;
         c->view = 1;
       }else{
@@ -1854,7 +1854,7 @@ int miruo_init()
 {
   memset(&opt, 0, sizeof(opt));
   opt.loop     = 1;
-  opt.quite    = 0;
+  opt.quiet    = 0;
   opt.promisc  = 1;
   opt.viewdata = 0;
   opt.fragment = 1;
@@ -1880,7 +1880,7 @@ struct option *get_optlist()
       "version",         0, NULL, 'V',
       "all",             0, NULL, 500,
       "live",            0, NULL, 501,
-      "quite",           0, NULL, 'q',
+      "quiet",           0, NULL, 'q',
       "fragment",        1, NULL, 'F',
       "flagment",        1, NULL, 'F',
       "color",           1, NULL, 'C',
@@ -1922,7 +1922,7 @@ void miruo_setopt(int argc, char *argv[])
         version();
         miruo_finish(0);
       case 'q':
-        opt.quite++;
+        opt.quiet++;
         break;
       case 'F':
         if(is_numeric(optarg)){

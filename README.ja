@@ -47,7 +47,7 @@ usage: miruo [option] [expression]
    -L, --session-limit=NUM        # active session limit. Default 1024
    -l, --segment-limit=NUM        # active segment limit. Default 65536
    -m, --dpi-mode=mode            # deep packet inspection mode. (now support only http)
-   -q, --qiute                    #
+   -q, --quiet                    #
        --all                      # all session lookup
        --live                     # live mode(all segment lookup)
 
@@ -148,7 +148,7 @@ expressionにはTCPダンプと同じ書式でフィルタを記述できます�
   モード（プロトコル名）を指定します。
   http: HTTPリクエスト・レスポンスの情報を表示します
 
-  -q, --qiute
+  -q, --quiet
   シンプルな表示になります。
   横幅が80文字以内じゃないと我慢出来ない場合に指定するとよいかもです。
 

@@ -45,7 +45,7 @@ usage: miruo [option] [expression]
    -L, --session-limit=NUM        # active session limit. Default 1024
    -l, --segment-limit=NUM        # active segment limit. Default 65536
    -m, --dpi-mode=mode            # deep packet inspection mode. (now support only http)
-   -q, --quite                    #
+   -q, --quiet                    #
        --all                      # all session lookup
        --live                     # live mode(all segment lookup)
 
@@ -139,7 +139,7 @@ Since it can not capture SYN/BACK, it can not trace TCP
   If you want to analyze payload of segments to show protocol specific information, specify the mode (protocol name).
   http: shows HTTP request response information
 
-  -q, --quite
+  -q, --quiet
   shows simple version of display
     If you prefer width shorter than 80 characters, you may want to use this option.
 

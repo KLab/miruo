@@ -216,7 +216,7 @@ typedef struct miruopt
   int  mode;                  // 動作モード。mオプションの値で決定
   int  all;                   // 1なら全セッション表示する
   int  live;                  // 1ならリアルタイム表示する
-  int  quite;                 // 疑わしきは罰しないモード
+  int  quiet;                 // 疑わしきは罰しないモード
   int  color;                 // カラー表示を有効にするかどうか
   int  lktype;                // データリンク層の種別
   int  pksize;                // キャプチャサイズ
