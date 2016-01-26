@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.67])
-AC_INIT(miruo, 0.9.6a, info-miruo@klab.com)
+AC_INIT(miruo, 0.9.6b, info-miruo@klab.com)
 AM_INIT_AUTOMAKE
 AC_CONFIG_SRCDIR([miruo.c])
 AC_CONFIG_HEADER([config.h])

@@ -42,7 +42,7 @@
       -L, --session-limit=NUM        # active session limit. Default 1024
       -l, --segment-limit=NUM        # active segment limit. Default 65536
       -m, --dpi-mode=mode            # deep packet inspection mode. (now support only http)
-      -q, --qiute                    #
+      -q, --quiet                    #
           --all                      # all session lookup
           --live                     # live mode(all segment lookup)
 
@@ -155,7 +155,7 @@
     </ul>
   </dd>
 
-  <dt>-q, --qiute</dt>
+  <dt>-q, --quiet</dt>
   <dd>シンプルな表示になります。
   横幅が <code>80</code> 文字以内じゃないと我慢出来ない場合に指定するとよいかもです。</dd>
 
