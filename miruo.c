@@ -1126,7 +1126,7 @@ void miruo_tcpsession_statistics(int view)
   sprintf(tstr, "%02d:%02d:%02d", ctm/3600, (ctm % 3600)/60, ctm % 60);
   fprintf(stderr, "\n");
   fprintf(stderr, "===== Session Statistics =====\n");
-  fprintf(stderr, "Captcha Time    : %s\n",   tstr);
+  fprintf(stderr, "Capture Time    : %s\n",   tstr);
   fprintf(stderr, "Total Sessions  : %llu\n", opt.count_ts_total);
   fprintf(stderr, "  Lookup        : %llu\n", opt.count_ts_view);
   fprintf(stderr, "    LongConnect : %llu\n", opt.count_ts_long);
