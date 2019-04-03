@@ -172,7 +172,7 @@
 各項目の意味は以下のとおりです。
 
     ===== Session Statistics =====
-    Captcha Time    : 00:01:03     開始してからの経過時間
+    Capture Time    : 00:01:03     開始してからの経過時間
     Total Sessions  : 0            追跡したTCPセッションの数
       Lookup        : 0            表示したTCPセッションの数
         LongConnect : 0            LongConnectTimeを超えたセッションの数

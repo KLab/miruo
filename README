@@ -154,7 +154,7 @@ With s option, miruo outputs stats periodically to stderr.
 Detail of each columns are as below.
 
 ===== Session Statistics =====
-Captcha Time    : 00:01:03     elapsed time
+Capture Time    : 00:01:03     elapsed time
 Total Sessions  : 0            the number of sessions tracked
   Lookup        : 0            the number of TCP sessions showed
     LongConnect : 0            the number of sessions exceeded LongConnectTime
